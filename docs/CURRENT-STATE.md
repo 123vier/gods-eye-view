@@ -1,5 +1,21 @@
 # God's Eye View Current State
 
+## Keyless location search
+
+The Location search box no longer requires a Google Maps key. With a key it
+uses Google Geocoding and near-view Places recovery as before. Without one,
+names resolve through OpenStreetMap Nominatim via the local
+`/api/geocode/search` proxy, which shares the cockpit briefing's
+one-request-per-second queue and identifying User-Agent, caches results for
+24 hours and rate-limits per client. The client picks the most important of up
+to five hits (so a motorway exit named after an airport does not win over the
+airport itself) and maps OSM classes onto the existing geocode
+framing modes, so countries, cities, airports, parks and streets frame as they
+do with Google. Decimal `lat, lon` input (for example `50.0379, 8.5622`) flies
+directly with no geocoder, with or without a key. Keyless search has no
+viewport bias, so ambiguous names should include a city. The OSM credit is
+listed in Data attribution.
+
 ## Remaining local service modules
 
 Overpass query validation, geometry simplification, disk caching and upstream

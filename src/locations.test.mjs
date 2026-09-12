@@ -19,6 +19,8 @@ import {
   REGION_SWATH_SPAN_KM,
   GLOBE_VIEW,
   searchAndFlyTo,
+  parseCoordinateQuery,
+  nominatimTypes,
 } from './locations.js';
 
 function stubViewer() {
@@ -596,4 +598,56 @@ test('search without an authority hook preserves the existing caller contract', 
   const result = await runSearch(viewer, {});
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
+});
+
+test('parseCoordinateQuery accepts decimal lat/lon pairs and rejects everything else', () => {
+  assert.deepEqual(parseCoordinateQuery('50.0379, 8.5622'), { lat: 50.0379, lng: 8.5622 });
+  assert.deepEqual(parseCoordinateQuery('-33.86 151.21'), { lat: -33.86, lng: 151.21 });
+  assert.equal(parseCoordinateQuery('Frankfurt Flughafen'), null);
+  assert.equal(parseCoordinateQuery('95, 10'), null);
+  assert.equal(parseCoordinateQuery('10, 200'), null);
+});
+
+test('nominatimTypes maps OSM classes onto the geocode framing vocabulary', () => {
+  assert.equal(geocodeNavigationMode(nominatimTypes({ class: 'aeroway', type: 'aerodrome', addresstype: 'aeroway' })), 'area-overview');
+  assert.equal(geocodeNavigationMode(nominatimTypes({ category: 'aeroway', type: 'aerodrome', addresstype: 'locality' })), 'area-overview');
+  assert.equal(geocodeNavigationMode(nominatimTypes({ class: 'boundary', type: 'administrative', addresstype: 'city' })), 'city-overview');
+  assert.equal(geocodeNavigationMode(nominatimTypes({ class: 'boundary', type: 'administrative', addresstype: 'country' })), 'region-overview');
+  assert.equal(geocodeNavigationMode(nominatimTypes({ class: 'highway', type: 'residential', addresstype: 'road' })), 'street-corridor');
+  assert.equal(geocodeNavigationMode(nominatimTypes({ class: 'tourism', type: 'attraction', addresstype: 'tourism' })), 'precise-place');
+});
+
+test('searchAndFlyTo falls back to Nominatim when no Google key is configured', async () => {
+  const viewer = stubViewer();
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.window = {};
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return {
+      ok: true,
+      json: async () => ({ results: [{
+        lat: 50.0539, lon: 8.5862, category: 'highway', type: 'motorway_junction', addresstype: 'highway',
+        importance: 0.0001, displayName: 'Frankfurt Flughafen (Anschlussstelle)',
+        boundingbox: [50.0538, 50.0540, 8.5861, 8.5863],
+      }, {
+        lat: 50.0333, lon: 8.5706, category: 'aeroway', type: 'aerodrome', addresstype: 'aeroway', importance: 0.5861,
+        displayName: 'Flughafen Frankfurt am Main, Hessen, Deutschland',
+        boundingbox: [50.0100, 50.0600, 8.5300, 8.6100],
+      }] }),
+    };
+  };
+  try {
+    const destination = await searchAndFlyTo(viewer, 'Frankfurt Flughafen');
+    assert.ok(urls[0].startsWith('/api/geocode/search?q=Frankfurt+Flughafen'));
+    assert.equal(destination.label, 'Flughafen Frankfurt am Main, Hessen, Deutschland');
+    assert.equal(destination.navigationMode, 'area-overview');
+    assert.equal(viewer.flights.length, 1);
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
 });

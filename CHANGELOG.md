@@ -13,6 +13,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Location search works without a Google Maps key: names resolve through
+  OpenStreetMap Nominatim via a rate-limited, cached local proxy, and decimal
+  `lat, lon` input flies directly. Searches with a Google Maps key are
+  unchanged.
+
 - Split Overpass/installation search, regional briefing/weather, local voice
   handlers and standalone key setup into focused modules. Preserve routes,
   source behavior, tool schemas and credential restrictions.

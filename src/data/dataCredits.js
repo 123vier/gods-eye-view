@@ -81,6 +81,13 @@ export const DATA_CREDITS = [
       '(ODbL 1.0; incomplete mapped context)',
   },
   {
+    key: 'location-search-osm',
+    html:
+      'Location search (without a Google Maps key): ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+      'via Nominatim (ODbL 1.0)',
+  },
+  {
     key: 'cockpit-place-osm',
     html:
       'Cockpit place context: ' +

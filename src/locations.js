@@ -347,22 +347,36 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * default; precise landmarks/buildings use close landmark framing.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
+  const apiKey = (typeof window !== 'undefined' && window.__GOOGLE_MAPS_API_KEY__)
+    || import.meta.env?.GOOGLE_MAPS_API_KEY;
 
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () => beforeFly === null || beforeFly() !== false;
 
-  // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
-  // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
-  // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-  const bias = viewportBias(viewer);
-  if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
-  const data = await response.json();
+  // Typed coordinates ("50.0379, 8.5622") need no geocoder at all.
+  const coords = parseCoordinateQuery(query);
+  let result = null;
+  if (coords) {
+    result = {
+      formatted_address: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`,
+      types: [],
+      geometry: { location: coords, viewport: null },
+    };
+  } else if (apiKey) {
+    // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
+    // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
+    // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
+    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+    const bias = viewportBias(viewer);
+    if (bias) url += `&bounds=${bias}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
+  } else {
+    // Keyless fallback: OpenStreetMap Nominatim, reshaped into a Google-style result.
+    result = await nominatimGeocode(query);
+  }
 
-  const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
   let lat = result?.geometry.location.lat;
   let lng = result?.geometry.location.lng;
   let label = result ? result.formatted_address : null;
@@ -372,7 +386,10 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   // Places-near-view recovery (annotationResolver's twin): a missed geocode, or one
   // that landed implausibly far from the view centre, snaps back to a view-biased
   // Places hit within the trust bound — "the Capitol" means the one on screen.
-  const recovered = await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null);
+  // Google-backed, so it only runs with a key and never overrides typed coordinates.
+  const recovered = (apiKey && !coords)
+    ? await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null)
+    : null;
   if (recovered) {
     lat = recovered.lat;
     lng = recovered.lon;
@@ -474,6 +491,92 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       ? 'explicit-range'
       : (options.forceClose ? navigationMode.replace('-overview', '-close') : navigationMode),
     rangeM: Math.round(flight.range),
+  };
+}
+
+/**
+ * Parse a "lat, lon" query (decimal degrees, comma or whitespace separated).
+ * Exported for tests.
+ * @param {string} query
+ * @returns {{lat:number, lng:number}|null}
+ */
+export function parseCoordinateQuery(query) {
+  const match = String(query || '').trim()
+    .match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+const GEOCODE_SEARCH_URL = '/api/geocode/search';
+
+/**
+ * Map a Nominatim hit's class/type/addresstype onto the Google geocode `types`
+ * vocabulary geocodeNavigationMode understands. Exported for tests.
+ * @param {{class?:string, type?:string, addresstype?:string}} hit
+ * @returns {string[]}
+ */
+export function nominatimTypes(hit) {
+  // format=jsonv2 names the OSM class `category`; format=json calls it `class`.
+  const cls = hit?.category ?? hit?.class;
+  const type = hit?.type;
+  const addressType = hit?.addresstype;
+  // An airport is an airport even when OSM files it under a locality address.
+  if (cls === 'aeroway' && type === 'aerodrome') return ['airport', 'point_of_interest'];
+  if (addressType === 'country') return ['country', 'political'];
+  if (addressType === 'state') return ['administrative_area_level_1', 'political'];
+  if (addressType === 'county' || addressType === 'region' || addressType === 'province') {
+    return ['administrative_area_level_2', 'political'];
+  }
+  if (['city', 'town', 'village', 'municipality', 'hamlet'].includes(addressType)) {
+    return ['locality', 'political'];
+  }
+  if (['suburb', 'neighbourhood', 'quarter', 'borough', 'city_district', 'postcode'].includes(addressType)) {
+    return ['neighborhood', 'political'];
+  }
+  if (cls === 'highway') return ['route'];
+  if (cls === 'natural' || cls === 'water' || cls === 'waterway') return ['natural_feature'];
+  if (cls === 'leisure' && ['park', 'nature_reserve', 'garden'].includes(type)) return ['park'];
+  if (cls === 'leisure' && type === 'stadium') return ['stadium'];
+  if (cls === 'amenity' && ['university', 'college'].includes(type)) return ['university'];
+  if (cls === 'landuse' && type === 'cemetery') return ['cemetery'];
+  if (cls === 'tourism' && type === 'zoo') return ['zoo'];
+  if (cls === 'tourism' && type === 'theme_park') return ['amusement_park'];
+  return ['point_of_interest'];
+}
+
+/**
+ * Keyless geocode via OpenStreetMap Nominatim, through the local
+ * `/api/geocode/search` proxy (identifying User-Agent, shared 1 req/s queue,
+ * cache). Returns a Google-geocode-shaped result or null.
+ * @param {string} query
+ */
+export async function nominatimGeocode(query) {
+  const params = new URLSearchParams({ q: query });
+  const language = typeof navigator !== 'undefined' ? navigator.language : '';
+  if (language) params.set('lang', language);
+  const response = await fetch(`${GEOCODE_SEARCH_URL}?${params}`);
+  if (!response.ok) throw new Error(`Location search failed (${response.status})`);
+  const { results } = await response.json();
+  // Nominatim's first hit is a text match, not the most notable place:
+  // "Frankfurt Flughafen" ranks a motorway exit above the airport. Prefer importance.
+  const hit = Array.isArray(results) && results.length
+    ? results.reduce((best, h) => (Number(h?.importance) > Number(best?.importance) ? h : best))
+    : null;
+  const lat = Number(hit?.lat);
+  const lng = Number(hit?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  // boundingbox is [south, north, west, east].
+  const [south, north, west, east] = (hit.boundingbox || []).map(Number);
+  const viewport = [south, north, west, east].every(Number.isFinite)
+    ? { southwest: { lat: south, lng: west }, northeast: { lat: north, lng: east } }
+    : null;
+  return {
+    formatted_address: hit.displayName || query,
+    types: nominatimTypes(hit),
+    geometry: { location: { lat, lng }, viewport },
   };
 }
 
