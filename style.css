@@ -9683,3 +9683,71 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+/* Typed AI commands (OpenRouter) — a slim box docked above the voice pill. */
+#gev-voice-control .gev-text-command {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.7rem);
+  z-index: 6;
+  width: min(20rem, calc(100vw - 2rem));
+  margin: 0;
+}
+
+#command-dock.dock-has-pinned-tray #gev-voice-control .gev-text-command {
+  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height));
+}
+
+#gev-voice-control .gev-text-command-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  outline: none;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+#gev-voice-control .gev-text-command-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.22);
+}
+
+#gev-voice-control .gev-text-command-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#gev-voice-control .gev-text-command-status {
+  position: absolute;
+  right: 0.75rem;
+  bottom: calc(100% + 0.3rem);
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#gev-voice-control .gev-text-command[data-state='busy'] .gev-text-command-status { color: var(--accent); }
+#gev-voice-control .gev-text-command[data-state='error'] .gev-text-command-status { color: #ff6b6b; }
+
+/* The hover help tray sits above the text box instead of on top of it. */
+#gev-voice-control.has-text-command .gev-voice-help-tray {
+  bottom: calc(100% + 3.6rem);
+}
+
+#command-dock.dock-has-pinned-tray #gev-voice-control.has-text-command .gev-voice-help-tray {
+  bottom: calc(100% + 4.6rem + var(--dock-pinned-stack-height));
+}
+
+body.recording-mode #gev-voice-control .gev-text-command {
+  display: none;
+}

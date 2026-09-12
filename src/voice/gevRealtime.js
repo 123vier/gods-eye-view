@@ -1,3 +1,4 @@
+import { mountTextCommand } from './textCommand.js';
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
 import {
   DEFAULT_VOICE_TIER,
@@ -222,6 +223,9 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
   }
   controller.syncCostUi();
   controller.bindPushToTalkShortcut();
+  // Typed AI commands (OpenRouter) reuse this runner; they work without an OpenAI key.
+  window.__gevTextCommand?.destroy();
+  window.__gevTextCommand = ui.root ? mountTextCommand({ root: ui.root, runner }) : null;
   window.__gevVoiceCommands = controller;
   return controller;
 }
