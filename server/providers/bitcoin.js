@@ -3,6 +3,7 @@ import { createCachedFeed, fetchUpstreamJson } from './bitcoin/feed.js';
 import {
   normalizeBitnodesCoordinates,
   normalizeBtcMapPlaces,
+  normalizeLightningChannels,
   normalizeLightningWorld,
   parseMerchantBox,
   selectMerchantsInBox,
@@ -11,6 +12,7 @@ import {
 const HOUR_MS = 60 * 60_000;
 
 const LIGHTNING_URL = 'https://mempool.space/api/v1/lightning/nodes/world';
+const CHANNELS_URL = 'https://mempool.space/api/v1/lightning/channels-geo';
 // bitnodes.io now redirects here; the public API allows 10 requests/day/IP.
 const BITNODES_URL = 'https://btcnodes.io/api/v1/snapshots/latest/?field=coordinates';
 const BTCMAP_URL = 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon,address,website,opening_hours,verified_at';
@@ -21,6 +23,8 @@ const BTCMAP_URL = 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon
  *
  * Routes:
  *   GET /api/bitcoin/lightning  → Lightning node locations (mempool.space, 1 h)
+ *   GET /api/bitcoin/channels   → Lightning channels merged per location pair
+ *                                 (mempool.space sample, 1 h)
  *   GET /api/bitcoin/nodes      → reachable full-node locations (Bitnodes, 24 h)
  *   GET /api/bitcoin/merchants?south=&west=&north=&east=
  *                               → BTC Map places inside a ≤10° viewport (24 h
@@ -38,6 +42,14 @@ export function bitcoinProxy() {
       retryCooldownMs: 10 * 60_000,
       load: async (signal) => normalizeLightningWorld(
         await fetchUpstreamJson(LIGHTNING_URL, signal, 8 * 1024 * 1024, readResponseJsonCapped),
+      ),
+    }),
+    channels: createCachedFeed({
+      name: 'bitcoin-channels',
+      ttlMs: HOUR_MS,
+      retryCooldownMs: 10 * 60_000,
+      load: async (signal) => normalizeLightningChannels(
+        await fetchUpstreamJson(CHANNELS_URL, signal, 8 * 1024 * 1024, readResponseJsonCapped),
       ),
     }),
     nodes: createCachedFeed({
@@ -106,8 +118,9 @@ export function bitcoinProxy() {
         }
 
         const feed = route === '/lightning' ? feeds.lightning
-          : route === '/nodes' ? feeds.nodes
-            : null;
+          : route === '/channels' ? feeds.channels
+            : route === '/nodes' ? feeds.nodes
+              : null;
         if (!feed) {
           sendJson(404, { error: 'unknown bitcoin route' });
           return;

@@ -8,6 +8,7 @@ import bitcoinLayers, {
   MERCHANT_VIEWPORT_MAX_DEGREES,
   boxContains,
   createBitcoinPointLayer,
+  boltHeight,
   formatBtc,
   lightningPixelSize,
   lightningRecord,
@@ -20,7 +21,7 @@ import { LAYER_STATE_REGISTRY } from './layerState.js';
 test('the three layers are registered with share-link tokens', () => {
   assert.deepEqual(
     bitcoinLayers.map((layer) => layer.id),
-    [BITCOIN_LIGHTNING_LAYER_ID, BITCOIN_NODES_LAYER_ID, BITCOIN_MERCHANTS_LAYER_ID],
+    [BITCOIN_LIGHTNING_LAYER_ID, 'bitcoin-channels', BITCOIN_NODES_LAYER_ID, BITCOIN_MERCHANTS_LAYER_ID],
   );
   for (const layer of bitcoinLayers) {
     assert.ok(LAYER_STATE_REGISTRY.some((entry) => entry.id === layer.id), layer.id);
@@ -39,6 +40,8 @@ test('BTC amounts and Lightning point sizes stay readable across magnitudes', ()
   assert.ok(lightningPixelSize(1e8) > 4);
   assert.ok(lightningPixelSize(100e8) > lightningPixelSize(1e8));
   assert.equal(lightningPixelSize(1e15), 14);
+  assert.equal(boltHeight(0), 16);
+  assert.equal(boltHeight(1e15), 30);
 });
 
 test('cards say what the data is and is not', () => {
@@ -274,5 +277,42 @@ test('an upstream failure is reported and clears on the next successful update',
   await layer.update();
   assert.equal(layer.getStats().count, 1);
   assert.equal(layer.getStats().error, null);
+  layer.destroy(viewer);
+}));
+
+test('icon layers draw billboards and swap to the highlighted icon on selection', () => withWindow(async () => {
+  const handlers = fakeHandlerFactory();
+  const overlay = overlayRecorder();
+  const layer = createBitcoinPointLayer({
+    id: 'btc-icon-test', name: 'Test', icon: 'T', source: 'test', route: 'lightning', mode: 'global',
+    refreshInterval: 3600_000,
+    markerImages: () => ({ normal: 'data:image/png;base64,normal', selected: 'data:image/png;base64,selected' }),
+    toRecords: (payload) => payload.locations.map(lightningRecord),
+    summary: () => 'ok',
+  }, {
+    overlayHost: overlay,
+    screenSpaceEventHandlerFactory: handlers.factory,
+    fetchImpl: async () => new Response(JSON.stringify({
+      locations: [{ id: 'hub', lat: 0, lon: 0, nodeCount: 2, capacitySat: 100e8, channels: 10, top: [] }],
+    }), { status: 200 }),
+  });
+  const viewer = fakeViewer(() => null);
+  layer.init(viewer);
+  layer.enable();
+  await layer.update();
+  const [collection] = viewer.primitives;
+  assert.ok(collection instanceof Cesium.BillboardCollection);
+  const bolt = collection.get(0);
+  assert.equal(bolt.image, 'data:image/png;base64,normal');
+  assert.ok(bolt.height > 10 && bolt.width < bolt.height, 'a bolt is taller than wide');
+
+  viewer.scene.pick = () => ({ collection, primitive: bolt, id: 'btc-icon-test:hub' });
+  handlers.handlers[0].action({ position: {} });
+  assert.equal(bolt.image, 'data:image/png;base64,selected');
+  assert.equal(bolt.scale, 1.5);
+  viewer.scene.pick = () => null;
+  handlers.handlers[0].action({ position: {} });
+  assert.equal(bolt.image, 'data:image/png;base64,normal');
+  assert.equal(bolt.scale, 1);
   layer.destroy(viewer);
 }));

@@ -153,6 +153,13 @@ export const DATA_CREDITS = [
       '(IP-geolocated, approximate)',
   },
   {
+    key: 'mempool-lightning-channels',
+    html:
+      'Lightning channel arcs: ' +
+      '<a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> ' +
+      '(capped sample of geolocated channels, approximate)',
+  },
+  {
     key: 'bitnodes',
     html:
       'Bitcoin full-node locations: ' +

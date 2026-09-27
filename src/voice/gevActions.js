@@ -179,6 +179,7 @@ const LAYER_ALIASES = new Map([
   ['lightning', 'bitcoin-lightning'],
   ['lightning nodes', 'bitcoin-lightning'],
   ['lightning network', 'bitcoin-lightning'],
+  ['lightning channels', 'bitcoin-channels'],
   ['bitcoin nodes', 'bitcoin-nodes'],
   ['bitcoin full nodes', 'bitcoin-nodes'],
   ['full nodes', 'bitcoin-nodes'],

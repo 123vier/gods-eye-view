@@ -6,6 +6,7 @@ import {
   merchantCategory,
   normalizeBitnodesCoordinates,
   normalizeBtcMapPlaces,
+  normalizeLightningChannels,
   normalizeLightningWorld,
   parseMerchantBox,
   selectMerchantsInBox,
@@ -263,4 +264,32 @@ test('upstream fetch reports HTTP errors with Retry-After for the cooldown', asy
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('Lightning channels merge per undirected location pair and skip same-point channels', () => {
+  const ash = [-77.4903, 39.0469];
+  const ore = [-119.705, 45.8401];
+  const nue = [11.0783, 49.4527];
+  const row = (aliasA, [lonA, latA], aliasB, [lonB, latB]) => [pubkey(1), aliasA, lonA, latA, pubkey(2), aliasB, lonB, latB];
+  const result = normalizeLightningChannels([
+    row('acinq', ash, 'bfx', ore),
+    row('bfx', ore, 'acinq', ash),
+    row('bfx', ore, 'other', ash),
+    row('lnd', ore, 'kraken', nue),
+    row('same', ore, 'same2', ore),
+    row('bad', [500, 1], 'x', ore),
+    'garbage',
+  ]);
+  assert.equal(result.channelCount, 5);
+  assert.equal(result.sameLocation, 1);
+  assert.equal(result.links.length, 2);
+  const [busy, single] = result.links;
+  assert.equal(busy.channels, 3, 'both directions collapse onto one link');
+  assert.deepEqual([busy.a.lat, busy.b.lat].sort(), [39.0469, 45.8401]);
+  const oreEnd = busy.a.lat === 45.8401 ? busy.a : busy.b;
+  assert.deepEqual(oreEnd.aliases, ['bfx']);
+  const ashEnd = busy.a.lat === 39.0469 ? busy.a : busy.b;
+  assert.deepEqual(ashEnd.aliases, ['acinq', 'other']);
+  assert.equal(single.channels, 1);
+  assert.throws(() => normalizeLightningChannels({}), /not an array/);
 });

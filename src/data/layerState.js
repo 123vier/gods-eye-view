@@ -277,6 +277,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ais-live-vessels', token: 'a', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'bitcoin-channels', token: 'h', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bitcoin-lightning', token: 'l', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bitcoin-merchants', token: 'k', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bitcoin-nodes', token: 'n', disposition: 'enabled-only' }),

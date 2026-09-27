@@ -18,15 +18,18 @@ import {
 } from './groundFloor.js';
 import { horizonOccluder } from './iconOrientation.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import bitcoinChannelsLayer from './bitcoinChannels.js';
 
 /**
- * Bitcoin network + economy layers: Lightning node locations (mempool.space),
+ * Bitcoin network + economy layers: Lightning node locations (mempool.space;
+ * channel arcs live in bitcoinChannels.js),
  * reachable full-node locations (Bitnodes) and places that accept bitcoin
  * (BTC Map). All three are served by the `/api/bitcoin/*` proxy
  * (server/providers/bitcoin.js), which owns the upstream caching.
  *
- * Built for modest hardware: each layer draws ONE PointPrimitiveCollection (a
- * single batched draw), keeps no per-point entities, and registers selection
+ * Built for modest hardware: each layer draws ONE batched collection — points
+ * for merchants, billboards sharing a single icon texture for Lightning bolts
+ * and full-node coins — keeps no per-point entities, and registers selection
  * context only for the point the user actually clicks. Merchants are fetched
  * per viewport and capped server-side, so the ~30k-place catalog never reaches
  * the browser.
@@ -77,6 +80,93 @@ export function formatBtc(sat) {
 }
 
 /**
+ * Draw a marker icon once and return it as a data URL. A string image lets
+ * the billboard atlas store ONE texture per icon for thousands of markers.
+ * @param {number} width
+ * @param {number} height
+ * @param {function(CanvasRenderingContext2D): void} paint
+ * @returns {string}
+ */
+function iconDataUrl(width, height, paint) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  paint(canvas.getContext('2d'));
+  return canvas.toDataURL('image/png');
+}
+
+/** Lightning bolt outline in unit coordinates (x right, y down). */
+const BOLT_POINTS = [[0.64, 0], [0.06, 0.58], [0.44, 0.58], [0.3, 1], [0.94, 0.38], [0.56, 0.38], [0.8, 0]];
+
+function boltIcon(fill, stroke) {
+  const width = 40;
+  const height = 64;
+  const pad = 4;
+  return iconDataUrl(width, height, (ctx) => {
+    ctx.beginPath();
+    BOLT_POINTS.forEach(([x, y], index) => {
+      const px = pad + x * (width - 2 * pad);
+      const py = pad + y * (height - 2 * pad);
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  });
+}
+
+/**
+ * Bitcoin coin: a filled disc with a drawn ₿ (a bold B plus the two strokes
+ * through its top and bottom). Drawn rather than typeset, because the ₿ glyph
+ * (U+20BF) is missing from many system fonts and would render as a box.
+ */
+function coinIcon(disc, mark) {
+  const size = 64;
+  const c = size / 2;
+  return iconDataUrl(size, size, (ctx) => {
+    ctx.beginPath();
+    ctx.arc(c, c, c - 3, 0, Math.PI * 2);
+    ctx.fillStyle = disc;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
+    ctx.fillStyle = mark;
+    ctx.strokeStyle = mark;
+    ctx.font = 'bold 40px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const capHalf = 14.5;
+    ctx.fillText('B', c + 1, c + capHalf);
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'butt';
+    for (const x of [c - 5, c + 4]) {
+      ctx.beginPath();
+      ctx.moveTo(x, c - capHalf - 7);
+      ctx.lineTo(x, c - capHalf + 3);
+      ctx.moveTo(x, c + capHalf - 3);
+      ctx.lineTo(x, c + capHalf + 7);
+      ctx.stroke();
+    }
+  });
+}
+
+/** Normal + selected icon pairs, drawn on first use in the browser. */
+export const LIGHTNING_MARKER_IMAGES = () => ({
+  normal: boltIcon(COLORS.lightning, '#000000'),
+  selected: boltIcon(COLORS.selected, COLORS.lightning),
+});
+export const NODE_MARKER_IMAGES = () => ({
+  normal: coinIcon(COLORS.node, '#ffffff'),
+  selected: coinIcon(COLORS.selected, COLORS.node),
+});
+
+/**
  * Point size for a Lightning location, log-scaled by its summed capacity so a
  * few hub locations do not dwarf the long tail.
  * @param {number} capacitySat
@@ -85,6 +175,15 @@ export function formatBtc(sat) {
 export function lightningPixelSize(capacitySat) {
   const btc = Math.max(0, Number(capacitySat) / 1e8 || 0);
   return Math.min(14, 4 + 2.2 * Math.log10(1 + btc * 10));
+}
+
+/**
+ * Bolt icon height for a Lightning location, following the point-size scale.
+ * @param {number} capacitySat
+ * @returns {number} Pixel height in [16, 30].
+ */
+export function boltHeight(capacitySat) {
+  return 16 + (lightningPixelSize(capacitySat) - 4) * 1.4;
 }
 
 /**
@@ -111,6 +210,9 @@ export function lightningRecord(location) {
     lon: location.lon,
     color: COLORS.lightning,
     pixelSize: lightningPixelSize(location.capacitySat),
+    // Bolt height grows with capacity (16–30 px); the icon is 40×64.
+    markerHeight: boltHeight(location.capacitySat),
+    markerWidth: boltHeight(location.capacitySat) * 0.625,
     title,
     details,
     properties: {
@@ -135,6 +237,8 @@ export function nodeRecord(location) {
     lon: location.lon,
     color: COLORS.node,
     pixelSize: 5,
+    markerWidth: 13,
+    markerHeight: 13,
     title: 'Bitcoin full node location',
     details: ['Reachable node(s) · IP-geolocated · approximate', 'Tor nodes have no location and are not shown'],
     properties: {},
@@ -233,6 +337,8 @@ function viewRectangleDegrees(viewer) {
  * @param {function(object): string} config.summary Payload → stats label.
  * @param {number} [config.refreshInterval] Global layers: manager refresh period.
  * @param {boolean} [config.groundClamp] Lift points onto the resolved ground floor.
+ * @param {function(): {normal: string, selected: string}} [config.markerImages]
+ *   Draw records as billboards with these icons instead of plain points.
  * @param {object} [deps] Test seams.
  * @returns {object} Data layer implementing the manager contract.
  */
@@ -251,7 +357,11 @@ export function createBitcoinPointLayer(config, {
     summary,
     refreshInterval = 0,
     groundClamp = false,
+    markerImages = null,
   } = config;
+  const useIcons = typeof markerImages === 'function';
+  /** @type {?{normal: string, selected: string}} Drawn at init (needs a DOM). */
+  let images = null;
   const selectedOverlayId = `${id}-selected`;
   const endpoint = `/api/bitcoin/${config.route}`;
 
@@ -289,10 +399,7 @@ export function createBitcoinPointLayer(config, {
   function clearSelection({ notify = true } = {}) {
     if (!state.selectedId) return;
     const entry = state.rendered.get(state.selectedId);
-    if (entry) {
-      entry.point.color = Cesium.Color.fromCssColorString(entry.record.color);
-      entry.point.pixelSize = entry.record.pixelSize;
-    }
+    if (entry) styleMarker(entry, false);
     state.selectedId = null;
     overlayHost.clearSource(selectedOverlayId);
     if (notify) clearSelectedEntityContextForLayer(id);
@@ -305,8 +412,7 @@ export function createBitcoinPointLayer(config, {
     if (!entry) return false;
     if (state.selectedId && state.selectedId !== key) clearSelection();
     state.selectedId = key;
-    entry.point.color = Cesium.Color.fromCssColorString(COLORS.selected);
-    entry.point.pixelSize = entry.record.pixelSize + 4;
+    styleMarker(entry, true);
     overlayHost.setEntries(selectedOverlayId, [{
       id: key,
       position: entry.point.position,
@@ -345,6 +451,45 @@ export function createBitcoinPointLayer(config, {
     return true;
   }
 
+  function styleMarker(entry, selected) {
+    if (useIcons) {
+      entry.point.image = selected ? images.selected : images.normal;
+      entry.point.scale = selected ? 1.5 : 1;
+      return;
+    }
+    entry.point.color = Cesium.Color.fromCssColorString(selected ? COLORS.selected : entry.record.color);
+    entry.point.pixelSize = entry.record.pixelSize + (selected ? 4 : 0);
+  }
+
+  function addMarker(key, record) {
+    const common = {
+      id: key,
+      position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat, pointHeight(record)),
+      scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.2, 2.0e7, 0.6),
+      // The Cesium globe is hidden (3D tiles are the planet), so nothing
+      // writes far-side depth: markers draw on top and the horizon pass
+      // below hides the ones behind the Earth.
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    };
+    if (useIcons) {
+      return state.points.add({
+        ...common,
+        image: images.normal,
+        width: record.markerWidth,
+        height: record.markerHeight,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      });
+    }
+    return state.points.add({
+      ...common,
+      pixelSize: record.pixelSize,
+      color: Cesium.Color.fromCssColorString(record.color),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 1,
+    });
+  }
+
   function pointHeight(record) {
     if (!groundClamp) return 0;
     return floorAltitudeM(null, cachedGroundFloor(record.lat, record.lon)) ?? 0;
@@ -358,20 +503,7 @@ export function createBitcoinPointLayer(config, {
     for (const record of records) {
       const key = pickId(record.id);
       if (state.rendered.has(key)) continue;
-      const point = state.points.add({
-        id: key,
-        position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat, pointHeight(record)),
-        pixelSize: record.pixelSize,
-        color: Cesium.Color.fromCssColorString(record.color),
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 1,
-        scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.2, 2.0e7, 0.6),
-        // The Cesium globe is hidden (3D tiles are the planet), so nothing
-        // writes far-side depth: points draw on top and the horizon pass
-        // below hides the ones behind the Earth.
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
-      state.rendered.set(key, { record, point });
+      state.rendered.set(key, { record, point: addMarker(key, record) });
     }
     state.lastCullPose = null;
     cullBehindHorizon(true);
@@ -541,10 +673,16 @@ export function createBitcoinPointLayer(config, {
 
     init(viewer) {
       state.viewer = viewer;
-      state.points = new Cesium.PointPrimitiveCollection({
-        // Opaque colors + opaque outline → a single opaque pass.
-        blendOption: Cesium.BlendOption.OPAQUE,
-      });
+      if (useIcons) {
+        images = markerImages();
+        // Icons have soft anti-aliased edges, so they blend translucently.
+        state.points = new Cesium.BillboardCollection({ blendOption: Cesium.BlendOption.TRANSLUCENT });
+      } else {
+        state.points = new Cesium.PointPrimitiveCollection({
+          // Opaque colors + opaque outline → a single opaque pass.
+          blendOption: Cesium.BlendOption.OPAQUE,
+        });
+      }
       state.points.show = false;
       viewer.scene.primitives.add(state.points);
     },
@@ -627,6 +765,7 @@ export const bitcoinLightningLayer = createBitcoinPointLayer({
   source: 'mempool.space',
   route: 'lightning',
   mode: 'global',
+  markerImages: LIGHTNING_MARKER_IMAGES,
   refreshInterval: 60 * 60_000,
   toRecords: (payload) => (Array.isArray(payload?.locations) ? payload.locations : []).map(lightningRecord),
   summary: (payload) => `${Number(payload?.nodeCount || 0).toLocaleString('en-US')} nodes · ${(payload?.locations?.length || 0).toLocaleString('en-US')} locations`,
@@ -639,6 +778,7 @@ export const bitcoinNodesLayer = createBitcoinPointLayer({
   source: 'Bitnodes',
   route: 'nodes',
   mode: 'global',
+  markerImages: NODE_MARKER_IMAGES,
   refreshInterval: 6 * 60 * 60_000,
   toRecords: (payload) => (Array.isArray(payload?.locations) ? payload.locations : []).map(nodeRecord),
   summary: (payload) => {
@@ -667,4 +807,4 @@ export const bitcoinMerchantsLayer = createBitcoinPointLayer({
   },
 });
 
-export default [bitcoinLightningLayer, bitcoinNodesLayer, bitcoinMerchantsLayer];
+export default [bitcoinLightningLayer, bitcoinChannelsLayer, bitcoinNodesLayer, bitcoinMerchantsLayer];

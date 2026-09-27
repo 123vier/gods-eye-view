@@ -216,3 +216,62 @@ export function selectMerchantsInBox(places, box, cap = MERCHANT_MAX_RESULTS) {
     places: inside.slice(0, cap),
   };
 }
+
+/** Node aliases kept per channel end for a link's card. */
+export const CHANNEL_ALIASES_PER_END = 2;
+
+/**
+ * mempool.space `/api/v1/lightning/channels-geo` → one link per pair of
+ * distinct geolocated points. Rows are
+ * `[pubkeyA, aliasA, lonA, latA, pubkeyB, aliasB, lonB, latB]`; the endpoint
+ * returns a capped sample of channels whose both ends are geolocated, without
+ * per-channel capacity. Channels inside one point cannot be drawn and are
+ * only counted.
+ * @param {Array} payload Upstream JSON.
+ * @returns {{channelCount:number, sameLocation:number, links:Array<object>}}
+ */
+export function normalizeLightningChannels(payload) {
+  if (!Array.isArray(payload)) throw new Error('Lightning channels payload is not an array');
+  const byPair = new Map();
+  let channelCount = 0;
+  let sameLocation = 0;
+  for (const row of payload) {
+    if (!Array.isArray(row) || row.length < 8) continue;
+    let a = { lat: Number(row[3]), lon: Number(row[2]), alias: cleanText(row[1], 40) };
+    let b = { lat: Number(row[7]), lon: Number(row[6]), alias: cleanText(row[5], 40) };
+    if (!finiteLatLon(a.lat, a.lon) || !finiteLatLon(b.lat, b.lon)) continue;
+    channelCount += 1;
+    let aId = `${a.lat.toFixed(4)},${a.lon.toFixed(4)}`;
+    let bId = `${b.lat.toFixed(4)},${b.lon.toFixed(4)}`;
+    if (aId === bId) {
+      sameLocation += 1;
+      continue;
+    }
+    // Undirected: store each pair once, in a stable end order.
+    if (bId < aId) {
+      [a, b] = [b, a];
+      [aId, bId] = [bId, aId];
+    }
+    const id = `${aId}|${bId}`;
+    let link = byPair.get(id);
+    if (!link) {
+      link = { id, a: { lat: a.lat, lon: a.lon }, b: { lat: b.lat, lon: b.lon }, channels: 0, aAliases: new Map(), bAliases: new Map() };
+      byPair.set(id, link);
+    }
+    link.channels += 1;
+    if (a.alias) link.aAliases.set(a.alias, (link.aAliases.get(a.alias) || 0) + 1);
+    if (b.alias) link.bAliases.set(b.alias, (link.bAliases.get(b.alias) || 0) + 1);
+  }
+  const topAliases = (counts) => [...counts.entries()]
+    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+    .slice(0, CHANNEL_ALIASES_PER_END)
+    .map(([alias]) => alias);
+  const links = [...byPair.values()].map((link) => ({
+    id: link.id,
+    a: { ...link.a, aliases: topAliases(link.aAliases) },
+    b: { ...link.b, aliases: topAliases(link.bAliases) },
+    channels: link.channels,
+  }));
+  links.sort((x, y) => y.channels - x.channels || x.id.localeCompare(y.id));
+  return { channelCount, sameLocation, links };
+}

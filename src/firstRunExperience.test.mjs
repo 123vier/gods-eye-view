@@ -652,12 +652,12 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
-  // Re-pinned for the three Bitcoin layer ids added to the layer enums.
+  // Re-pinned for the four Bitcoin layer ids added to the layer enums.
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26378, 'serialized tool schema length drifted');
+  assert.equal(block.length, 26455, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '83fa94cd04c4ccbc7aa156892c3ff5ade26e22e438094b6783fadd89eae646ee',
+    '88ffc1481c2694737a10766812dbf7b44bd23193c74a2980bcf685a9279ee68a',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
