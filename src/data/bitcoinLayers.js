@@ -38,6 +38,7 @@ import bitcoinChannelsLayer from './bitcoinChannels.js';
 export const BITCOIN_LIGHTNING_LAYER_ID = 'bitcoin-lightning';
 export const BITCOIN_NODES_LAYER_ID = 'bitcoin-nodes';
 export const BITCOIN_MERCHANTS_LAYER_ID = 'bitcoin-merchants';
+export const BITCOIN_MEETUPS_LAYER_ID = 'bitcoin-meetups';
 
 /** Largest viewport (degrees per axis) for which merchants are requested. */
 export const MERCHANT_VIEWPORT_MAX_DEGREES = 10;
@@ -156,10 +157,41 @@ function coinIcon(disc, mark) {
   });
 }
 
+/**
+ * Round "21" badge for Einundzwanzig meetups.
+ * @param {string} disc Fill colour.
+ * @param {string} mark Text colour.
+ * @param {number} [alpha=1] Whole-badge opacity (inactive meetups fade).
+ */
+function badgeIcon(disc, mark, alpha = 1) {
+  const size = 64;
+  const c = size / 2;
+  return iconDataUrl(size, size, (ctx) => {
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(c, c, c - 3, 0, Math.PI * 2);
+    ctx.fillStyle = disc;
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#1b1b1b';
+    ctx.stroke();
+    ctx.fillStyle = mark;
+    ctx.font = 'bold 30px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('21', c, c + 2);
+  });
+}
+
 /** Normal + selected icon pairs, drawn on first use in the browser. */
 export const LIGHTNING_MARKER_IMAGES = () => ({
   normal: boltIcon(COLORS.lightning, '#000000'),
   selected: boltIcon(COLORS.selected, COLORS.lightning),
+});
+export const MEETUP_MARKER_IMAGES = () => ({
+  normal: badgeIcon('#ffffff', COLORS.node),
+  inactive: badgeIcon('#c9ced3', '#5b6570', 0.55),
+  selected: badgeIcon(COLORS.node, '#ffffff'),
 });
 export const NODE_MARKER_IMAGES = () => ({
   normal: coinIcon(COLORS.node, '#ffffff'),
@@ -279,6 +311,62 @@ export function merchantRecord(place) {
 }
 
 /**
+ * Event time for a card, in the viewer's local time zone.
+ * @param {number} epochMs
+ * @param {string} [timeZone] Override for tests.
+ * @returns {string} e.g. "2 Oct 2026, 18:00".
+ */
+export function formatEventTime(epochMs, timeZone) {
+  return new Date(epochMs).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+/**
+ * Einundzwanzig meetup → render/card record.
+ * @param {object} meetup Normalized proxy record.
+ * @param {string} [timeZone] Override for tests.
+ * @returns {object}
+ */
+export function meetupRecord(meetup, timeZone) {
+  const place = [meetup.city, meetup.country].filter(Boolean).join(', ');
+  const details = [];
+  if (place) details.push(place);
+  if (meetup.nextEvent) {
+    details.push(`Next: ${formatEventTime(meetup.nextEvent.at, timeZone)}${meetup.nextEvent.venue ? ` · ${meetup.nextEvent.venue}` : ''}`);
+  } else if (meetup.lastEventAt) {
+    details.push(`Last meetup: ${formatEventTime(meetup.lastEventAt, timeZone).split(',')[0]}`);
+  }
+  if (meetup.active === true) details.push('Active · met or meets within 6 months');
+  else if (meetup.active === false) details.push('Inactive · no meetup within 6 months');
+  else details.push('Activity unknown');
+  const inactive = meetup.active === false;
+  return {
+    id: String(meetup.id),
+    lat: meetup.lat,
+    lon: meetup.lon,
+    color: COLORS.node,
+    pixelSize: 6,
+    markerKey: inactive ? 'inactive' : 'normal',
+    markerWidth: inactive ? 13 : 17,
+    markerHeight: inactive ? 13 : 17,
+    title: meetup.name,
+    details,
+    properties: {
+      city: meetup.city || null,
+      country: meetup.country || null,
+      active: meetup.active,
+      lastEventAt: meetup.lastEventAt ? new Date(meetup.lastEventAt).toISOString() : null,
+      nextEvent: meetup.nextEvent
+        ? { at: new Date(meetup.nextEvent.at).toISOString(), venue: meetup.nextEvent.venue || null }
+        : null,
+      links: meetup.links || {},
+    },
+  };
+}
+
+/**
  * Request box for the current view: the view rectangle padded on every side,
  * or null when the view is wider than the merchant limit or crosses the
  * antimeridian (the user is asked to zoom in).
@@ -338,7 +426,8 @@ function viewRectangleDegrees(viewer) {
  * @param {number} [config.refreshInterval] Global layers: manager refresh period.
  * @param {boolean} [config.groundClamp] Lift points onto the resolved ground floor.
  * @param {function(): {normal: string, selected: string}} [config.markerImages]
- *   Draw records as billboards with these icons instead of plain points.
+ *   Draw records as billboards with these icons instead of plain points; a
+ *   record's `markerKey` picks another icon from the set (default "normal").
  * @param {object} [deps] Test seams.
  * @returns {object} Data layer implementing the manager contract.
  */
@@ -453,7 +542,7 @@ export function createBitcoinPointLayer(config, {
 
   function styleMarker(entry, selected) {
     if (useIcons) {
-      entry.point.image = selected ? images.selected : images.normal;
+      entry.point.image = selected ? images.selected : images[entry.record.markerKey || 'normal'];
       entry.point.scale = selected ? 1.5 : 1;
       return;
     }
@@ -474,7 +563,7 @@ export function createBitcoinPointLayer(config, {
     if (useIcons) {
       return state.points.add({
         ...common,
-        image: images.normal,
+        image: images[record.markerKey || 'normal'],
         width: record.markerWidth,
         height: record.markerHeight,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -807,4 +896,30 @@ export const bitcoinMerchantsLayer = createBitcoinPointLayer({
   },
 });
 
-export default [bitcoinLightningLayer, bitcoinChannelsLayer, bitcoinNodesLayer, bitcoinMerchantsLayer];
+export const bitcoinMeetupsLayer = createBitcoinPointLayer({
+  id: BITCOIN_MEETUPS_LAYER_ID,
+  name: 'Bitcoin Meetups',
+  icon: '㉑',
+  source: 'Einundzwanzig',
+  route: 'meetups',
+  mode: 'global',
+  refreshInterval: 6 * 60 * 60_000,
+  markerImages: MEETUP_MARKER_IMAGES,
+  // Active meetups last, so they draw above faded inactive badges.
+  toRecords: (payload) => (Array.isArray(payload?.meetups) ? payload.meetups : [])
+    .map((meetup) => meetupRecord(meetup))
+    .sort((a, b) => (a.markerKey === 'inactive' ? 0 : 1) - (b.markerKey === 'inactive' ? 0 : 1)),
+  summary: (payload) => {
+    const total = payload?.meetups?.length || 0;
+    const active = Number(payload?.activeCount);
+    return Number.isFinite(active) ? `${total} meetups · ${active} active` : `${total} meetups`;
+  },
+});
+
+export default [
+  bitcoinLightningLayer,
+  bitcoinChannelsLayer,
+  bitcoinNodesLayer,
+  bitcoinMerchantsLayer,
+  bitcoinMeetupsLayer,
+];

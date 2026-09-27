@@ -5,6 +5,7 @@ import {
   normalizeBtcMapPlaces,
   normalizeLightningChannels,
   normalizeLightningWorld,
+  normalizeMeetups,
   parseMerchantBox,
   selectMerchantsInBox,
 } from './bitcoin/normalize.js';
@@ -15,6 +16,8 @@ const LIGHTNING_URL = 'https://mempool.space/api/v1/lightning/nodes/world';
 const CHANNELS_URL = 'https://mempool.space/api/v1/lightning/channels-geo';
 // bitnodes.io now redirects here; the public API allows 10 requests/day/IP.
 const BITNODES_URL = 'https://btcnodes.io/api/v1/snapshots/latest/?field=coordinates';
+const MEETUPS_URL = 'https://portal.einundzwanzig.space/api/meetups';
+const MEETUP_EVENTS_URL = 'https://portal.einundzwanzig.space/api/meetup-events';
 const BTCMAP_URL = 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon,address,website,opening_hours,verified_at';
 
 /**
@@ -30,6 +33,8 @@ const BTCMAP_URL = 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon
  *                               → BTC Map places inside a ≤10° viewport (24 h
  *                                 snapshot, filtered and capped server-side so
  *                                 the browser never holds the ~30k-place list)
+ *   GET /api/bitcoin/meetups    → Einundzwanzig meetups with activity status
+ *                                 (portal meetups + events, 24 h)
  *   GET /api/bitcoin/status     → per-feed cache status
  *
  * @returns {import('vite').Plugin}
@@ -60,6 +65,22 @@ export function bitcoinProxy() {
       load: async (signal) => normalizeBitnodesCoordinates(
         await fetchUpstreamJson(BITNODES_URL, signal, 2 * 1024 * 1024, readResponseJsonCapped),
       ),
+    }),
+    meetups: createCachedFeed({
+      name: 'bitcoin-meetups',
+      ttlMs: 24 * HOUR_MS,
+      retryCooldownMs: 30 * 60_000,
+      load: async (signal) => {
+        const meetups = await fetchUpstreamJson(MEETUPS_URL, signal, 4 * 1024 * 1024, readResponseJsonCapped);
+        // Status is optional: without the events feed the meetups still map.
+        let events = null;
+        try {
+          events = await fetchUpstreamJson(MEETUP_EVENTS_URL, signal, 24 * 1024 * 1024, readResponseJsonCapped);
+        } catch (err) {
+          console.warn('[bitcoin-meetups] events unavailable, status unknown:', err?.message || err);
+        }
+        return normalizeMeetups(meetups, events, Date.now());
+      },
     }),
     merchants: createCachedFeed({
       name: 'bitcoin-merchants',
@@ -120,7 +141,8 @@ export function bitcoinProxy() {
         const feed = route === '/lightning' ? feeds.lightning
           : route === '/channels' ? feeds.channels
             : route === '/nodes' ? feeds.nodes
-              : null;
+              : route === '/meetups' ? feeds.meetups
+                : null;
         if (!feed) {
           sendJson(404, { error: 'unknown bitcoin route' });
           return;

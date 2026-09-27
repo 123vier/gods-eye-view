@@ -8,6 +8,7 @@ import {
   normalizeBtcMapPlaces,
   normalizeLightningChannels,
   normalizeLightningWorld,
+  normalizeMeetups,
   parseMerchantBox,
   selectMerchantsInBox,
 } from '../../server/providers/bitcoin/normalize.js';
@@ -49,7 +50,7 @@ test('Bitnodes coordinates are [lat, lon] pairs, de-duplicated and validated', (
   const result = normalizeBitnodesCoordinates({
     timestamp: 1790495654,
     total_nodes: 25377,
-    coordinates: [[-45.0226, 168.7289], [-45.0226, 168.7289], [95, 0], ['x', 1], null, [52.5, 13.4]],
+    coordinates: [[-45.0226, 168.7289], [-45.0226, 168.7289], [95, 0], ['x', 1], null, [null, 13], [52.5, 13.4]],
   });
   assert.equal(result.totalNodes, 25377);
   assert.equal(result.snapshotAt, 1790495654 * 1000);
@@ -292,4 +293,59 @@ test('Lightning channels merge per undirected location pair and skip same-point 
   assert.deepEqual(ashEnd.aliases, ['acinq', 'other']);
   assert.equal(single.channels, 1);
   assert.throws(() => normalizeLightningChannels({}), /not an array/);
+});
+
+test('meetup activity comes from the event calendar: recent or upcoming within 6 months', () => {
+  const now = Date.UTC(2026, 8, 27);
+  const day = 24 * 3600_000;
+  const portal = (slug) => `https://portal.einundzwanzig.space/de/meetup/${slug}`;
+  const meetup = (id, slug, extra = {}) => ({
+    id, name: `Meetup ${slug}`, city: slug, country: 'de', latitude: 50, longitude: 8 + id,
+    portalLink: portal(slug), url: 'https://t.me/x', website: 'javascript:alert(1)', nostr: 'npub1x', next_event: null, ...extra,
+  });
+  const event = (slug, offsetDays, extra = {}) => ({
+    'meetup.portalLink': portal(slug), start_iso: new Date(now + offsetDays * day).toISOString(), ...extra,
+  });
+  const result = normalizeMeetups([
+    meetup(1, 'recent'),
+    meetup(2, 'stale'),
+    meetup(3, 'upcoming'),
+    meetup(4, 'far-future'),
+    meetup(5, 'never'),
+    meetup(6, 'no-coords', { latitude: null }),
+    meetup(7, 'null-island', { latitude: 0, longitude: 0 }),
+  ], [
+    event('recent', -30), event('recent', -400),
+    event('stale', -200),
+    event('upcoming', 10, { osm_name: 'Kleine Burg' }), event('upcoming', 40),
+    event('far-future', 3000),
+    { 'meetup.portalLink': portal('recent'), start_iso: 'not a date' },
+  ], now);
+  const byCity = Object.fromEntries(result.meetups.map((m) => [m.city, m]));
+  assert.deepEqual(Object.keys(byCity), ['recent', 'stale', 'upcoming', 'far-future', 'never']);
+  assert.equal(byCity.recent.active, true);
+  assert.equal(byCity.recent.lastEventAt, now - 30 * day, 'the latest past event wins');
+  assert.equal(byCity.stale.active, false);
+  assert.equal(byCity.upcoming.active, true);
+  assert.deepEqual(byCity.upcoming.nextEvent, { at: now + 10 * day, venue: 'Kleine Burg' });
+  assert.equal(byCity['far-future'].active, false, 'a placeholder years ahead does not count');
+  assert.equal(byCity['far-future'].nextEvent, null);
+  assert.equal(byCity.never.active, false);
+  assert.equal(result.activeCount, 2);
+  assert.equal(byCity.recent.country, 'DE');
+  assert.equal(byCity.recent.links.website, '', 'only http(s) links pass');
+  assert.equal(byCity.recent.links.chat, 'https://t.me/x');
+});
+
+test('meetups still map with unknown activity when the event feed is unavailable', () => {
+  const now = Date.UTC(2026, 8, 27);
+  const result = normalizeMeetups([{
+    id: 1, name: 'Oldenburg', city: 'Oldenburg', country: 'DE', latitude: 53.1, longitude: 8.2,
+    portalLink: 'https://portal.einundzwanzig.space/de/meetup/oldenburg',
+    next_event: { start: '2026-10-02T16:00:00.000000Z', location: 'Kleine Burg' },
+  }], null, now);
+  assert.equal(result.activeCount, null);
+  assert.equal(result.meetups[0].active, null);
+  assert.deepEqual(result.meetups[0].nextEvent, { at: Date.UTC(2026, 9, 2, 16), venue: 'Kleine Burg' });
+  assert.throws(() => normalizeMeetups({}, null, now), /not an array/);
 });

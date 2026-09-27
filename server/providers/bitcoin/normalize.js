@@ -19,6 +19,11 @@ function finiteLatLon(lat, lon) {
     && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
 }
 
+/** Coordinate from upstream JSON; Number(null) would be 0, so null/'' → NaN. */
+function coord(value) {
+  return value == null || value === '' ? NaN : Number(value);
+}
+
 function cleanText(value, max = 80) {
   if (typeof value !== 'string') return '';
   const text = value.replace(/\s+/g, ' ').trim();
@@ -43,8 +48,8 @@ export function normalizeLightningWorld(payload) {
   let nodeCount = 0;
   for (const row of rows) {
     if (!Array.isArray(row)) continue;
-    const lon = Number(row[0]);
-    const lat = Number(row[1]);
+    const lon = coord(row[0]);
+    const lat = coord(row[1]);
     const pubkey = typeof row[2] === 'string' ? row[2] : '';
     if (!finiteLatLon(lat, lon) || !/^[0-9a-f]{66}$/i.test(pubkey)) continue;
     nodeCount += 1;
@@ -96,8 +101,8 @@ export function normalizeBitnodesCoordinates(payload) {
   const locations = [];
   for (const pair of pairs) {
     if (!Array.isArray(pair)) continue;
-    const lat = Number(pair[0]);
-    const lon = Number(pair[1]);
+    const lat = coord(pair[0]);
+    const lon = coord(pair[1]);
     if (!finiteLatLon(lat, lon)) continue;
     const id = `${lat.toFixed(4)},${lon.toFixed(4)}`;
     if (seen.has(id)) continue;
@@ -147,8 +152,8 @@ export function normalizeBtcMapPlaces(payload) {
   const places = [];
   for (const row of payload) {
     if (!row || typeof row !== 'object' || row.deleted_at) continue;
-    const lat = Number(row.lat);
-    const lon = Number(row.lon);
+    const lat = coord(row.lat);
+    const lon = coord(row.lon);
     if (!finiteLatLon(lat, lon) || !Number.isInteger(row.id)) continue;
     const category = merchantCategory(row.icon);
     const website = cleanText(row.website, 200);
@@ -237,8 +242,8 @@ export function normalizeLightningChannels(payload) {
   let sameLocation = 0;
   for (const row of payload) {
     if (!Array.isArray(row) || row.length < 8) continue;
-    let a = { lat: Number(row[3]), lon: Number(row[2]), alias: cleanText(row[1], 40) };
-    let b = { lat: Number(row[7]), lon: Number(row[6]), alias: cleanText(row[5], 40) };
+    let a = { lat: coord(row[3]), lon: coord(row[2]), alias: cleanText(row[1], 40) };
+    let b = { lat: coord(row[7]), lon: coord(row[6]), alias: cleanText(row[5], 40) };
     if (!finiteLatLon(a.lat, a.lon) || !finiteLatLon(b.lat, b.lon)) continue;
     channelCount += 1;
     let aId = `${a.lat.toFixed(4)},${a.lon.toFixed(4)}`;
@@ -274,4 +279,88 @@ export function normalizeLightningChannels(payload) {
   }));
   links.sort((x, y) => y.channels - x.channels || x.id.localeCompare(y.id));
   return { channelCount, sameLocation, links };
+}
+
+/** A meetup counts as active with a meetup this recently, or one this soon. */
+export const MEETUP_ACTIVE_WINDOW_MS = 183 * 24 * 60 * 60 * 1000;
+
+function eventTime(event) {
+  const time = Date.parse(event?.start_iso || event?.start || '');
+  return Number.isFinite(time) ? time : null;
+}
+
+function httpLink(value) {
+  const text = cleanText(value, 300);
+  return /^https?:\/\//i.test(text) ? text : '';
+}
+
+/**
+ * Einundzwanzig portal `/api/meetups` (+ `/api/meetup-events`) → map records.
+ *
+ * The portal has no activity field; its list page derives "active" from the
+ * last event. Here a meetup is active when it met within the window or has an
+ * event scheduled within it. Events are matched to meetups by portal link.
+ * Without the events feed (`events === null`) the status is unknown (null).
+ * @param {Array<object>} meetups Upstream meetups.
+ * @param {?Array<object>} events Upstream events, or null when unavailable.
+ * @param {number} now Epoch ms.
+ * @returns {{activeCount:?number, meetups:Array<object>}}
+ */
+export function normalizeMeetups(meetups, events, now) {
+  if (!Array.isArray(meetups)) throw new Error('Meetups payload is not an array');
+  const lastByLink = new Map();
+  const nextByLink = new Map();
+  if (Array.isArray(events)) {
+    for (const event of events) {
+      const link = event?.['meetup.portalLink'];
+      const time = eventTime(event);
+      if (typeof link !== 'string' || time === null) continue;
+      if (time <= now) {
+        if (!(lastByLink.get(link) >= time)) lastByLink.set(link, time);
+      } else if (time - now <= MEETUP_ACTIVE_WINDOW_MS) {
+        const current = nextByLink.get(link);
+        if (!current || time < current.time) nextByLink.set(link, { time, event });
+      }
+    }
+  }
+  const statusKnown = Array.isArray(events);
+  const records = [];
+  let activeCount = 0;
+  for (const meetup of meetups) {
+    const lat = coord(meetup?.latitude);
+    const lon = coord(meetup?.longitude);
+    if (!Number.isInteger(meetup?.id) || !finiteLatLon(lat, lon) || (lat === 0 && lon === 0)) continue;
+    const portalLink = httpLink(meetup.portalLink);
+    const lastEventAt = lastByLink.get(portalLink) ?? null;
+    const upcoming = nextByLink.get(portalLink) || null;
+    // The meetup's own next_event carries the venue even without the feed.
+    const ownNext = meetup.next_event && eventTime(meetup.next_event) > now ? meetup.next_event : null;
+    const next = upcoming ? upcoming.event : ownNext;
+    const nextAt = next ? eventTime(next) : null;
+    const active = statusKnown
+      ? Boolean(upcoming) || (lastEventAt !== null && now - lastEventAt <= MEETUP_ACTIVE_WINDOW_MS)
+      : null;
+    if (active) activeCount += 1;
+    records.push({
+      id: meetup.id,
+      lat,
+      lon,
+      name: cleanText(meetup.name) || 'Bitcoin meetup',
+      city: cleanText(meetup.city, 60),
+      country: cleanText(meetup.country, 2).toUpperCase(),
+      active,
+      lastEventAt,
+      nextEvent: nextAt === null ? null : {
+        at: nextAt,
+        venue: cleanText(next.osm_name || next.location || next.osm_address, 100),
+      },
+      links: {
+        portal: portalLink,
+        chat: httpLink(meetup.url),
+        website: httpLink(meetup.website),
+        nostr: cleanText(meetup.nostr, 100),
+      },
+    });
+  }
+  return { activeCount: statusKnown ? activeCount : null, meetups: records };
 }

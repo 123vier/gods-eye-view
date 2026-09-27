@@ -12,6 +12,7 @@ import bitcoinLayers, {
   formatBtc,
   lightningPixelSize,
   lightningRecord,
+  meetupRecord,
   merchantRecord,
   merchantRequestBox,
   nodeRecord,
@@ -21,7 +22,7 @@ import { LAYER_STATE_REGISTRY } from './layerState.js';
 test('the three layers are registered with share-link tokens', () => {
   assert.deepEqual(
     bitcoinLayers.map((layer) => layer.id),
-    [BITCOIN_LIGHTNING_LAYER_ID, 'bitcoin-channels', BITCOIN_NODES_LAYER_ID, BITCOIN_MERCHANTS_LAYER_ID],
+    [BITCOIN_LIGHTNING_LAYER_ID, 'bitcoin-channels', BITCOIN_NODES_LAYER_ID, BITCOIN_MERCHANTS_LAYER_ID, 'bitcoin-meetups'],
   );
   for (const layer of bitcoinLayers) {
     assert.ok(LAYER_STATE_REGISTRY.some((entry) => entry.id === layer.id), layer.id);
@@ -316,3 +317,22 @@ test('icon layers draw billboards and swap to the highlighted icon on selection'
   assert.equal(bolt.scale, 1);
   layer.destroy(viewer);
 }));
+
+test('meetup cards show place, next or last meetup, and activity; inactive badges fade', () => {
+  const base = { id: 11, lat: 53.1, lon: 8.2, name: 'Einundzwanzig Oldenburg', city: 'Oldenburg', country: 'DE', links: { portal: 'https://p' } };
+  const upcoming = meetupRecord({ ...base, active: true, lastEventAt: Date.UTC(2026, 7, 30), nextEvent: { at: Date.UTC(2026, 9, 2, 16), venue: 'Kleine Burg' } }, 'UTC');
+  assert.equal(upcoming.id, '11');
+  assert.equal(upcoming.title, 'Einundzwanzig Oldenburg');
+  assert.deepEqual(upcoming.details, ['Oldenburg, DE', 'Next: 2 Oct 2026, 16:00 · Kleine Burg', 'Active · met or meets within 6 months']);
+  assert.equal(upcoming.markerKey, 'normal');
+  assert.equal(upcoming.properties.nextEvent.at, '2026-10-02T16:00:00.000Z');
+
+  const dormant = meetupRecord({ ...base, active: false, lastEventAt: Date.UTC(2025, 0, 15), nextEvent: null }, 'UTC');
+  assert.deepEqual(dormant.details, ['Oldenburg, DE', 'Last meetup: 15 Jan 2025', 'Inactive · no meetup within 6 months']);
+  assert.equal(dormant.markerKey, 'inactive');
+  assert.ok(dormant.markerWidth < upcoming.markerWidth);
+
+  const unknown = meetupRecord({ ...base, active: null, lastEventAt: null, nextEvent: null }, 'UTC');
+  assert.deepEqual(unknown.details, ['Oldenburg, DE', 'Activity unknown']);
+  assert.equal(unknown.markerKey, 'normal');
+});

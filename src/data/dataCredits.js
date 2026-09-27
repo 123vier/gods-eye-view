@@ -173,6 +173,13 @@ export const DATA_CREDITS = [
       '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL)',
   },
   {
+    key: 'einundzwanzig-meetups',
+    html:
+      'Bitcoin meetups: ' +
+      '<a href="https://portal.einundzwanzig.space" target="_blank" rel="noopener">Einundzwanzig Portal</a> ' +
+      '(activity derived from its event calendar)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +

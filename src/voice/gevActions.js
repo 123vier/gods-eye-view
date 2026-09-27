@@ -187,6 +187,10 @@ const LAYER_ALIASES = new Map([
   ['bitcoin shops', 'bitcoin-merchants'],
   ['bitcoin atms', 'bitcoin-merchants'],
   ['btc map', 'bitcoin-merchants'],
+  ['meetups', 'bitcoin-meetups'],
+  ['bitcoin meetups', 'bitcoin-meetups'],
+  ['einundzwanzig', 'bitcoin-meetups'],
+  ['einundzwanzig meetups', 'bitcoin-meetups'],
 ]);
 
 const CITY_ALIASES = new Map([
