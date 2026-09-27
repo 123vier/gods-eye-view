@@ -46,6 +46,8 @@ const MERCHANT_REQUEST_DEBOUNCE_MS = 600;
 /** Viewport padding per side, so short pans reuse the last response. */
 const MERCHANT_VIEWPORT_PAD_RATIO = 0.2;
 const HORIZON_CULL_INTERVAL_MS = 200;
+const ICON_READY_POLL_MS = 100;
+const ICON_READY_POLL_LIMIT = 20;
 
 const COLORS = Object.freeze({
   lightning: '#b98cff',
@@ -158,28 +160,40 @@ function coinIcon(disc, mark) {
 }
 
 /**
- * Round "21" badge for Einundzwanzig meetups.
- * @param {string} disc Fill colour.
+ * Diamond "21" badge for Einundzwanzig meetups — angular, so it stands apart
+ * from the round full-node coins.
+ * @param {string} fill Fill colour.
+ * @param {string} border Border colour.
  * @param {string} mark Text colour.
  * @param {number} [alpha=1] Whole-badge opacity (inactive meetups fade).
  */
-function badgeIcon(disc, mark, alpha = 1) {
+function diamondBadgeIcon(fill, border, mark, alpha = 1) {
   const size = 64;
   const c = size / 2;
+  const r = c - 4;
   return iconDataUrl(size, size, (ctx) => {
     ctx.globalAlpha = alpha;
     ctx.beginPath();
-    ctx.arc(c, c, c - 3, 0, Math.PI * 2);
-    ctx.fillStyle = disc;
+    ctx.moveTo(c, c - r);
+    ctx.lineTo(c + r, c);
+    ctx.lineTo(c, c + r);
+    ctx.lineTo(c - r, c);
+    ctx.closePath();
+    ctx.lineJoin = 'round';
+    // Dark halo under the coloured border keeps the edge crisp on any imagery.
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#111111';
+    ctx.stroke();
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.lineWidth = 4;
-    ctx.strokeStyle = '#1b1b1b';
+    ctx.strokeStyle = border;
     ctx.stroke();
     ctx.fillStyle = mark;
-    ctx.font = 'bold 30px Arial, Helvetica, sans-serif';
+    ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('21', c, c + 2);
+    ctx.fillText('21', c, c + 1);
   });
 }
 
@@ -189,9 +203,10 @@ export const LIGHTNING_MARKER_IMAGES = () => ({
   selected: boltIcon(COLORS.selected, COLORS.lightning),
 });
 export const MEETUP_MARKER_IMAGES = () => ({
-  normal: badgeIcon('#ffffff', COLORS.node),
-  inactive: badgeIcon('#c9ced3', '#5b6570', 0.55),
-  selected: badgeIcon(COLORS.node, '#ffffff'),
+  normal: diamondBadgeIcon('#ffffff', COLORS.node, COLORS.node),
+  // Dark slate with a light rim: legible, yet clearly not the white/orange active badge.
+  inactive: diamondBadgeIcon('#46505a', '#b8c0c8', '#f0f2f4'),
+  selected: diamondBadgeIcon(COLORS.node, '#ffffff', '#ffffff'),
 });
 export const NODE_MARKER_IMAGES = () => ({
   normal: coinIcon(COLORS.node, '#ffffff'),
@@ -349,8 +364,8 @@ export function meetupRecord(meetup, timeZone) {
     color: COLORS.node,
     pixelSize: 6,
     markerKey: inactive ? 'inactive' : 'normal',
-    markerWidth: inactive ? 13 : 17,
-    markerHeight: inactive ? 13 : 17,
+    markerWidth: inactive ? 22 : 26,
+    markerHeight: inactive ? 22 : 26,
     title: meetup.name,
     details,
     properties: {
@@ -477,6 +492,7 @@ export function createBitcoinPointLayer(config, {
     debounceTimer: null,
     lastCullAt: 0,
     lastCullPose: null,
+    iconTimer: null,
   };
 
   const pickId = (recordId) => `${id}:${recordId}`;
@@ -540,10 +556,30 @@ export function createBitcoinPointLayer(config, {
     return true;
   }
 
+  /**
+   * A billboard's new icon loads asynchronously on first use, and the render
+   * governor idles a parked camera — without more frames the swapped marker
+   * would stay blank until the next camera move. Request frames until the
+   * texture is in (Billboard.ready) or a short limit passes.
+   */
+  function renderUntilIconReady(billboard) {
+    clearInterval(state.iconTimer);
+    let polls = 0;
+    state.iconTimer = setInterval(() => {
+      polls += 1;
+      requestRender('icon');
+      if (billboard.ready !== false || polls >= ICON_READY_POLL_LIMIT) {
+        clearInterval(state.iconTimer);
+        state.iconTimer = null;
+      }
+    }, ICON_READY_POLL_MS);
+  }
+
   function styleMarker(entry, selected) {
     if (useIcons) {
       entry.point.image = selected ? images.selected : images[entry.record.markerKey || 'normal'];
       entry.point.scale = selected ? 1.5 : 1;
+      renderUntilIconReady(entry.point);
       return;
     }
     entry.point.color = Cesium.Color.fromCssColorString(selected ? COLORS.selected : entry.record.color);
@@ -824,6 +860,8 @@ export function createBitcoinPointLayer(config, {
     destroy(viewer) {
       this.disable();
       overlayHost.clearSource(selectedOverlayId);
+      clearInterval(state.iconTimer);
+      state.iconTimer = null;
       if (state.points) {
         (viewer || state.viewer)?.scene?.primitives?.remove(state.points);
       }
