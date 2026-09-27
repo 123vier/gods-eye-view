@@ -12,6 +12,7 @@ import aisLiveVesselsLayer from '../data/aisLiveVessels.js';
 import militaryInstallationsLayer from '../data/militaryInstallations.js';
 import militaryAwarenessLayer from '../data/militaryAwareness.js';
 import localDataLayers from '../data/localLayers.js';
+import bitcoinLayers from '../data/bitcoinLayers.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 
 /** Register the standalone layer catalog before allowing state restoration. */
@@ -47,6 +48,9 @@ export function createStandaloneData({
   dataManager.register(militaryAwarenessLayer);
   militaryAwarenessLayer.attachDataManager(dataManager);
   for (const layer of localDataLayers) {
+    dataManager.register(layer);
+  }
+  for (const layer of bitcoinLayers) {
     dataManager.register(layer);
   }
   // Restoration starts only after the complete production registry is sealed.

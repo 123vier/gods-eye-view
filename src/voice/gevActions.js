@@ -176,6 +176,16 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['lightning', 'bitcoin-lightning'],
+  ['lightning nodes', 'bitcoin-lightning'],
+  ['lightning network', 'bitcoin-lightning'],
+  ['bitcoin nodes', 'bitcoin-nodes'],
+  ['bitcoin full nodes', 'bitcoin-nodes'],
+  ['full nodes', 'bitcoin-nodes'],
+  ['bitcoin merchants', 'bitcoin-merchants'],
+  ['bitcoin shops', 'bitcoin-merchants'],
+  ['bitcoin atms', 'bitcoin-merchants'],
+  ['btc map', 'bitcoin-merchants'],
 ]);
 
 const CITY_ALIASES = new Map([

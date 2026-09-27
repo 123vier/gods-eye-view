@@ -146,6 +146,26 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'mempool-lightning',
+    html:
+      'Lightning node locations: ' +
+      '<a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> ' +
+      '(IP-geolocated, approximate)',
+  },
+  {
+    key: 'bitnodes',
+    html:
+      'Bitcoin full-node locations: ' +
+      '<a href="https://btcnodes.io" target="_blank" rel="noopener">Bitnodes</a> ' +
+      '(reachable nodes, IP-geolocated, approximate)',
+  },
+  {
+    key: 'btcmap',
+    html:
+      'Bitcoin merchants: <a href="https://btcmap.org" target="_blank" rel="noopener">BTC Map</a> · ' +
+      '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +
