@@ -9689,7 +9689,8 @@ body.scene-playback-mode #key-setup {
 /* Typed AI commands (OpenRouter) — a slim box docked above the voice pill. */
 #gev-voice-control .gev-text-command {
   position: absolute;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: calc(100% + 0.7rem);
   z-index: 6;
   width: min(20rem, calc(100vw - 2rem));
@@ -9727,19 +9728,87 @@ body.scene-playback-mode #key-setup {
 
 #gev-voice-control .gev-text-command-status {
   position: absolute;
-  right: 0.75rem;
-  bottom: calc(100% + 0.3rem);
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--text-secondary);
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0.35rem 0.8rem;
+  color: rgba(223, 245, 250, 0.92);
+  background: rgba(7, 22, 31, 0.96);
+  border: 1px solid rgba(0, 212, 255, 0.34);
+  border-radius: 0.6rem;
+  box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.5);
   font-family: var(--font-mono);
-  font-size: calc(9px * var(--ui-font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: calc(12px * var(--ui-font-scale));
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transform: translateX(-50%);
+}
+
+#gev-voice-control .gev-text-command-status:empty {
+  display: none;
 }
 
 #gev-voice-control .gev-text-command[data-state='busy'] .gev-text-command-status { color: var(--accent); }
-#gev-voice-control .gev-text-command[data-state='error'] .gev-text-command-status { color: #ff6b6b; }
+#gev-voice-control .gev-text-command[data-state='ok'] .gev-text-command-status { color: #7dffb0; border-color: rgba(125, 255, 176, 0.4); }
+#gev-voice-control .gev-text-command[data-state='error'] .gev-text-command-status { color: #ff8a8a; border-color: rgba(255, 107, 107, 0.45); }
+
+/* Not-understood panel: the model's reply plus clickable example commands. */
+#gev-voice-control .gev-text-command-help {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.5rem);
+  box-sizing: border-box;
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.8rem;
+  color: rgba(223, 245, 250, 0.92);
+  background: rgba(7, 22, 31, 0.96);
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: 0.38rem;
+  box-shadow: 0 0.85rem 2rem rgba(0, 0, 0, 0.58);
+  transform: translateX(-50%);
+}
+
+#gev-voice-control .gev-text-command-help-message {
+  margin-bottom: 0.55rem;
+  color: #ff8a8a;
+  font-family: var(--font-sans);
+  font-size: calc(13px * var(--ui-font-scale));
+  line-height: 1.35;
+}
+
+#gev-voice-control .gev-text-command-help-kicker {
+  margin-bottom: 0.4rem;
+  color: rgba(54, 220, 255, 0.8);
+  font-family: var(--font-mono);
+  font-size: calc(10px * var(--ui-font-scale));
+  letter-spacing: 0.06rem;
+}
+
+#gev-voice-control .gev-text-command-help-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+#gev-voice-control .gev-text-command-example {
+  padding: 0.25rem 0.5rem;
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.28);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: calc(12px * var(--ui-font-scale));
+  cursor: pointer;
+}
+
+#gev-voice-control .gev-text-command-example:hover,
+#gev-voice-control .gev-text-command-example:focus-visible {
+  color: #ffffff;
+  border-color: var(--accent);
+}
 
 /* The hover help tray sits above the text box instead of on top of it. */
 #gev-voice-control.has-text-command .gev-voice-help-tray {

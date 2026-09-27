@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { planTextCommandCalls, TEXT_COMMAND_TOOL_NAMES } from './textCommandPlan.js';
-import { runTextCommand, isTextCommandShortcut } from './textCommand.js';
+import { runTextCommand, isTextCommandShortcut, TEXT_COMMAND_EXAMPLES } from './textCommand.js';
 import { textCommandTools, extractToolCalls } from '../../server/providers/openrouter/text-command.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 
@@ -65,6 +65,7 @@ test('runTextCommand surfaces the model reply when no tool fits', async () => {
   const fetchImpl = async () => ({ ok: true, json: async () => ({ calls: [], reply: 'Dafür gibt es keinen Befehl.' }) });
   const outcome = await runTextCommand('mach Kaffee', { runner: async () => ({ ok: true }), fetchImpl });
   assert.equal(outcome.ok, false);
+  assert.equal(outcome.noMatch, true);
   assert.equal(outcome.message, 'Dafür gibt es keinen Befehl.');
 });
 
@@ -85,4 +86,11 @@ test('a typed orbit request adds the orbit the model left out', () => {
   assert.equal(planTextCommandCalls(flight, 'bring mich zum times square').length, 1);
   const explicit = [...flight, { name: 'move_camera', args: { motion: 'orbit', speed: 'fast' } }];
   assert.equal(planTextCommandCalls(explicit, 'circle around JFK').length, 2);
+});
+
+test('an unknown tool or empty reply still reports a not-recognized outcome', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ calls: [{ name: 'analyst_query', args: {} }], reply: '' }) });
+  const outcome = await runTextCommand('what is this?', { runner: async () => ({ ok: true }), fetchImpl });
+  assert.deepEqual([outcome.noMatch, outcome.message], [true, 'Command not recognized.']);
+  assert.ok(TEXT_COMMAND_EXAMPLES.length >= 6);
 });
