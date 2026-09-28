@@ -36,11 +36,21 @@ export async function runTextCommand(text, { runner, fetchImpl = fetch }) {
     body: JSON.stringify({ text }),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) return { ok: false, message: data?.error || `Request failed (${response.status})`, results: [] };
+  if (!response.ok)
+    return {
+      ok: false,
+      message: data?.error || `Request failed (${response.status})`,
+      results: [],
+    };
 
   const plan = planTextCommandCalls(data.calls, text);
   if (!plan.length) {
-    return { ok: false, noMatch: true, message: data.reply || 'Command not recognized.', results: [] };
+    return {
+      ok: false,
+      noMatch: true,
+      message: data.reply || 'Command not recognized.',
+      results: [],
+    };
   }
 
   const results = [];
@@ -53,15 +63,30 @@ export async function runTextCommand(text, { runner, fetchImpl = fetch }) {
     }
     results.push({ name: call.name, result });
     if (result?.ok === false) {
-      return { ok: false, message: `${call.name}: ${result.error || 'failed'}`, results };
+      return {
+        ok: false,
+        message: `${call.name}: ${result.error || 'failed'}`,
+        results,
+      };
     }
   }
-  return { ok: true, message: plan.map((call) => call.name).join(' → '), results };
+  return {
+    ok: true,
+    message: plan.map((call) => call.name).join(' → '),
+    results,
+  };
 }
 
 /** True when a keydown should jump focus into the command box ("/" outside text entry). */
 export function isTextCommandShortcut(event) {
-  if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return false;
+  if (
+    event.key !== '/' ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    event.defaultPrevented
+  )
+    return false;
   const target = event.target;
   if (target?.isContentEditable) return false;
   return !target?.closest?.('input, textarea, select, [contenteditable]');
@@ -120,7 +145,8 @@ export function mountTextCommand({ root, runner }) {
         input.disabled = false;
         input.title = `AI command via OpenRouter (${data.model})`;
       } else {
-        input.title = 'Add OPENROUTER_API_KEY to .env to enable typed AI commands';
+        input.title =
+          'Add OPENROUTER_API_KEY to .env to enable typed AI commands';
       }
     })
     .catch(() => {

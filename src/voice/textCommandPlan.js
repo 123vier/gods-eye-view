@@ -36,7 +36,8 @@ const ALLOWED = new Set(TEXT_COMMAND_TOOL_NAMES);
 /** Upper bound on calls executed for one typed sentence. */
 export const TEXT_COMMAND_MAX_CALLS = 6;
 
-const ORBIT_WORDS = /\b(orbit\w*|circl\w*|kreis\w*|umkreis\w*|umrund\w*|rundflug|360)\b|drumherum|herum fliegen/i;
+const ORBIT_WORDS =
+  /\b(orbit\w*|circl\w*|kreis\w*|umkreis\w*|umrund\w*|rundflug|360)\b|drumherum|herum fliegen/i;
 const SLOW_WORDS = /\b(slow\w*|langsam\w*)\b/i;
 const FAST_WORDS = /\b(fast\w*|quick\w*|schnell\w*)\b/i;
 
@@ -56,17 +57,32 @@ export function planTextCommandCalls(calls, text = '') {
     .slice(0, TEXT_COMMAND_MAX_CALLS)
     .map((call) => ({
       name: call.name,
-      args: call.args && typeof call.args === 'object' && !Array.isArray(call.args) ? { ...call.args } : {},
+      args:
+        call.args && typeof call.args === 'object' && !Array.isArray(call.args)
+          ? { ...call.args }
+          : {},
     }));
   const wantsOrbit = ORBIT_WORDS.test(String(text));
   const hasCameraMove = plan.some((call) => call.name === 'move_camera');
-  if (wantsOrbit && !hasCameraMove && plan.some((call) => call.name === 'fly_to_location')
-      && plan.length < TEXT_COMMAND_MAX_CALLS) {
-    const speed = SLOW_WORDS.test(text) ? 'slow' : (FAST_WORDS.test(text) ? 'fast' : 'normal');
-    plan.push({ name: 'move_camera', args: { motion: 'orbit', mode: 'continuous', speed } });
+  if (
+    wantsOrbit &&
+    !hasCameraMove &&
+    plan.some((call) => call.name === 'fly_to_location') &&
+    plan.length < TEXT_COMMAND_MAX_CALLS
+  ) {
+    const speed = SLOW_WORDS.test(text)
+      ? 'slow'
+      : FAST_WORDS.test(text)
+        ? 'fast'
+        : 'normal';
+    plan.push({
+      name: 'move_camera',
+      args: { motion: 'orbit', mode: 'continuous', speed },
+    });
   }
   plan.forEach((call, index) => {
-    if (call.name === 'fly_to_location' && index < plan.length - 1) call.args.waitForArrival = true;
+    if (call.name === 'fly_to_location' && index < plan.length - 1)
+      call.args.waitForArrival = true;
   });
   return plan;
 }

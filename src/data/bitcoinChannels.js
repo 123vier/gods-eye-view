@@ -40,7 +40,11 @@ const READY_POLL_MS = 150;
 const READY_POLL_LIMIT = 200;
 
 const SELECTED_OVERLAY_ID = `${BITCOIN_CHANNELS_LAYER_ID}-selected`;
-const SELECTED_OVERLAY_OPTIONS = Object.freeze({ cohortLimit: 1, collisionCapacity: 0, moving: false });
+const SELECTED_OVERLAY_OPTIONS = Object.freeze({
+  cohortLimit: 1,
+  collisionCapacity: 0,
+  moving: false,
+});
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
   setEntries: setOverlayEntries,
@@ -62,7 +66,10 @@ export function channelArc(a, b) {
   const end = Cesium.Cartographic.fromDegrees(b.lon, b.lat, 0);
   geodesicScratch.setEndPoints(start, end);
   const distanceM = geodesicScratch.surfaceDistance;
-  const peak = Math.max(ARC_MIN_HEIGHT_M, Math.min(ARC_MAX_HEIGHT_M, distanceM * ARC_HEIGHT_RATIO));
+  const peak = Math.max(
+    ARC_MIN_HEIGHT_M,
+    Math.min(ARC_MAX_HEIGHT_M, distanceM * ARC_HEIGHT_RATIO),
+  );
   const segments = Math.max(
     ARC_MIN_SEGMENTS,
     Math.min(ARC_MAX_SEGMENTS, Math.ceil(distanceM / ARC_SEGMENT_LENGTH_M)),
@@ -70,12 +77,17 @@ export function channelArc(a, b) {
   const positions = [];
   for (let i = 0; i <= segments; i += 1) {
     const t = i / segments;
-    const point = geodesicScratch.interpolateUsingFraction(t, cartographicScratch);
-    positions.push(Cesium.Cartesian3.fromRadians(
-      point.longitude,
-      point.latitude,
-      peak * Math.sin(Math.PI * t),
-    ));
+    const point = geodesicScratch.interpolateUsingFraction(
+      t,
+      cartographicScratch,
+    );
+    positions.push(
+      Cesium.Cartesian3.fromRadians(
+        point.longitude,
+        point.latitude,
+        peak * Math.sin(Math.PI * t),
+      ),
+    );
   }
   return { positions, apex: positions[Math.floor(segments / 2)], distanceM };
 }
@@ -99,7 +111,8 @@ export function channelAlpha(channels) {
  */
 export function channelCard(link, distanceM) {
   const count = Number(link.channels) || 0;
-  const end = (side) => (side?.aliases?.length ? side.aliases.join(', ') : 'unnamed nodes');
+  const end = (side) =>
+    side?.aliases?.length ? side.aliases.join(', ') : 'unnamed nodes';
   return {
     title: `${count} Lightning channel${count === 1 ? '' : 's'}`,
     details: [
@@ -117,7 +130,8 @@ export function channelCard(link, distanceM) {
 export function createBitcoinChannelsLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   fetchImpl = (...args) => globalThis.fetch(...args),
-  screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
+  screenSpaceEventHandlerFactory = (canvas) =>
+    new Cesium.ScreenSpaceEventHandler(canvas),
 } = {}) {
   const id = BITCOIN_CHANNELS_LAYER_ID;
   const name = 'Lightning Channels';
@@ -153,7 +167,11 @@ export function createBitcoinChannelsLayer({
     const primitive = state.primitive;
     if (!primitive?.ready) return;
     const attributes = primitive.getGeometryInstanceAttributes(key);
-    if (attributes) attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(color, attributes.color);
+    if (attributes)
+      attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
+        color,
+        attributes.color,
+      );
   }
 
   function clearSelection({ notify = true } = {}) {
@@ -173,13 +191,20 @@ export function createBitcoinChannelsLayer({
    */
   function anchorNear(entry, screenPosition) {
     const scene = state.viewer?.scene;
-    if (!screenPosition || typeof scene?.cartesianToCanvasCoordinates !== 'function') return entry.apex;
+    if (
+      !screenPosition ||
+      typeof scene?.cartesianToCanvasCoordinates !== 'function'
+    )
+      return entry.apex;
     let best = entry.apex;
     let bestDistance = Infinity;
     for (const position of channelArc(entry.link.a, entry.link.b).positions) {
       const canvas = scene.cartesianToCanvasCoordinates(position);
       if (!canvas) continue;
-      const distance = Math.hypot(canvas.x - screenPosition.x, canvas.y - screenPosition.y);
+      const distance = Math.hypot(
+        canvas.x - screenPosition.x,
+        canvas.y - screenPosition.y,
+      );
       if (distance < bestDistance) {
         bestDistance = distance;
         best = position;
@@ -195,27 +220,33 @@ export function createBitcoinChannelsLayer({
     state.selectedId = key;
     setInstanceColor(key, Cesium.Color.fromCssColorString(SELECTED_COLOR));
     const card = channelCard(entry.link, entry.distanceM);
-    overlayHost.setEntries(SELECTED_OVERLAY_ID, [{
-      id: key,
-      position: anchorNear(entry, screenPosition),
-      variant: 'selected',
-      selected: true,
-      protected: true,
-      paintLane: 'selected',
-      collisionGroup: 'ambient-card',
-      priority: Number.MAX_SAFE_INTEGER,
-      title: card.title,
-      details: card.details,
-      accent: ARC_COLOR,
-      interactive: false,
-      anchorRadiusPx: 6,
-      minAnchorGapPx: 11,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    }], SELECTED_OVERLAY_OPTIONS);
+    overlayHost.setEntries(
+      SELECTED_OVERLAY_ID,
+      [
+        {
+          id: key,
+          position: anchorNear(entry, screenPosition),
+          variant: 'selected',
+          selected: true,
+          protected: true,
+          paintLane: 'selected',
+          collisionGroup: 'ambient-card',
+          priority: Number.MAX_SAFE_INTEGER,
+          title: card.title,
+          details: card.details,
+          accent: ARC_COLOR,
+          interactive: false,
+          anchorRadiusPx: 6,
+          minAnchorGapPx: 11,
+          verticalOnly: true,
+          placement: 'above',
+          edgeFade: 'keyhole',
+          horizonCull: true,
+          terrainOcclusion: false,
+        },
+      ],
+      SELECTED_OVERLAY_OPTIONS,
+    );
     const carrier = { id: key };
     const apex = Cesium.Cartographic.fromCartesian(entry.apex);
     registerEntityContext(carrier, {
@@ -241,7 +272,8 @@ export function createBitcoinChannelsLayer({
   function removePrimitive() {
     clearInterval(state.readyTimer);
     state.readyTimer = null;
-    if (state.primitive && state.viewer) state.viewer.scene.primitives.remove(state.primitive);
+    if (state.primitive && state.viewer)
+      state.viewer.scene.primitives.remove(state.primitive);
     state.primitive = null;
   }
 
@@ -255,11 +287,22 @@ export function createBitcoinChannelsLayer({
     clearInterval(state.readyTimer);
     state.readyTimer = setInterval(() => {
       polls += 1;
-      if (state.primitive !== primitive || primitive.ready || polls > READY_POLL_LIMIT) {
+      if (
+        state.primitive !== primitive ||
+        primitive.ready ||
+        polls > READY_POLL_LIMIT
+      ) {
         clearInterval(state.readyTimer);
         state.readyTimer = null;
-        if (state.primitive === primitive && primitive.ready && state.selectedId) {
-          setInstanceColor(state.selectedId, Cesium.Color.fromCssColorString(SELECTED_COLOR));
+        if (
+          state.primitive === primitive &&
+          primitive.ready &&
+          state.selectedId
+        ) {
+          setInstanceColor(
+            state.selectedId,
+            Cesium.Color.fromCssColorString(SELECTED_COLOR),
+          );
         }
       }
       requestRender('build');
@@ -275,18 +318,24 @@ export function createBitcoinChannelsLayer({
       const key = pickId(link.id);
       if (state.links.has(key)) continue;
       const { positions, apex, distanceM } = channelArc(link.a, link.b);
-      const color = Cesium.Color.fromCssColorString(ARC_COLOR).withAlpha(channelAlpha(link.channels));
+      const color = Cesium.Color.fromCssColorString(ARC_COLOR).withAlpha(
+        channelAlpha(link.channels),
+      );
       state.links.set(key, { link, apex, distanceM, color });
-      instances.push(new Cesium.GeometryInstance({
-        id: key,
-        geometry: new Cesium.PolylineGeometry({
-          positions,
-          width: 1.0,
-          arcType: Cesium.ArcType.NONE,
-          vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+      instances.push(
+        new Cesium.GeometryInstance({
+          id: key,
+          geometry: new Cesium.PolylineGeometry({
+            positions,
+            width: 1.0,
+            arcType: Cesium.ArcType.NONE,
+            vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+          }),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+          },
         }),
-        attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(color) },
-      }));
+      );
     }
     if (!instances.length) return;
     const primitive = new Cesium.Primitive({
@@ -303,21 +352,29 @@ export function createBitcoinChannelsLayer({
 
   async function load({ force = false } = {}) {
     if (!state.enabled || !state.viewer) return;
-    if (!force && state.links.size && state.lastUpdate
-      && Date.now() - state.lastUpdate < refreshInterval / 2) return;
+    if (
+      !force &&
+      state.links.size &&
+      state.lastUpdate &&
+      Date.now() - state.lastUpdate < refreshInterval / 2
+    )
+      return;
     state.abort?.abort();
     const abort = new AbortController();
     state.abort = abort;
     state.loading = true;
     try {
-      const response = await fetchImpl(`/api/bitcoin/channels`, { signal: abort.signal });
+      const response = await fetchImpl(`/api/bitcoin/channels`, {
+        signal: abort.signal,
+      });
       let payload = null;
       try {
         payload = await response.json();
       } catch {
         /* non-JSON error body */
       }
-      if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+      if (!response.ok)
+        throw new Error(payload?.error || `HTTP ${response.status}`);
       if (abort.signal.aborted || !state.enabled) return;
       const fetchedAt = Number(payload?.fetchedAt) || null;
       // An unchanged upstream snapshot keeps the already-built primitive.
@@ -350,7 +407,10 @@ export function createBitcoinChannelsLayer({
     state.clickHandler.setInputAction((click) => {
       if (!state.enabled) return;
       const picked = viewer.scene.pick(click.position);
-      const key = picked?.primitive === state.primitive && typeof picked.id === 'string' ? picked.id : null;
+      const key =
+        picked?.primitive === state.primitive && typeof picked.id === 'string'
+          ? picked.id
+          : null;
       if (key && state.links.has(key)) {
         if (key !== state.selectedId) select(key, click.position);
         return;

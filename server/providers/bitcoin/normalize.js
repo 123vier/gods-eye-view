@@ -15,8 +15,14 @@ export const MERCHANT_MAX_RESULTS = 1000;
 export const LIGHTNING_TOP_NODES = 3;
 
 function finiteLatLon(lat, lon) {
-  return Number.isFinite(lat) && Number.isFinite(lon)
-    && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
 }
 
 /** Coordinate from upstream JSON; Number(null) would be 0, so null/'' → NaN. */
@@ -81,10 +87,15 @@ export function normalizeLightningWorld(payload) {
   }
   const locations = [...byLocation.values()];
   for (const location of locations) {
-    location.top.sort((a, b) => b.capacitySat - a.capacitySat || a.pubkey.localeCompare(b.pubkey));
+    location.top.sort(
+      (a, b) =>
+        b.capacitySat - a.capacitySat || a.pubkey.localeCompare(b.pubkey),
+    );
     location.top.length = Math.min(location.top.length, LIGHTNING_TOP_NODES);
   }
-  locations.sort((a, b) => b.capacitySat - a.capacitySat || a.id.localeCompare(b.id));
+  locations.sort(
+    (a, b) => b.capacitySat - a.capacitySat || a.id.localeCompare(b.id),
+  );
   return { nodeCount, locations };
 }
 
@@ -95,7 +106,9 @@ export function normalizeLightningWorld(payload) {
  * @returns {{totalNodes:?number, snapshotAt:?number, locations:Array<object>}}
  */
 export function normalizeBitnodesCoordinates(payload) {
-  const pairs = Array.isArray(payload?.coordinates) ? payload.coordinates : null;
+  const pairs = Array.isArray(payload?.coordinates)
+    ? payload.coordinates
+    : null;
   if (!pairs) throw new Error('Bitnodes payload has no coordinates array');
   const seen = new Set();
   const locations = [];
@@ -148,7 +161,8 @@ export function merchantCategory(icon) {
  * @returns {Array<object>}
  */
 export function normalizeBtcMapPlaces(payload) {
-  if (!Array.isArray(payload)) throw new Error('BTC Map payload is not an array');
+  if (!Array.isArray(payload))
+    throw new Error('BTC Map payload is not an array');
   const places = [];
   for (const row of payload) {
     if (!row || typeof row !== 'object' || row.deleted_at) continue;
@@ -187,7 +201,8 @@ export function parseMerchantBox(params) {
     if (!Number.isFinite(value)) return null;
     box[key] = value;
   }
-  if (box.south < -90 || box.north > 90 || box.west < -180 || box.east > 180) return null;
+  if (box.south < -90 || box.north > 90 || box.west < -180 || box.east > 180)
+    return null;
   if (box.north <= box.south || box.east <= box.west) return null;
   // A little slack over the client's own limit absorbs its 5-decimal rounding.
   const limit = MERCHANT_MAX_VIEWPORT_DEGREES + 0.01;
@@ -205,13 +220,19 @@ export function parseMerchantBox(params) {
 export function selectMerchantsInBox(places, box, cap = MERCHANT_MAX_RESULTS) {
   const inside = [];
   for (const place of places) {
-    if (place.lat >= box.south && place.lat <= box.north
-      && place.lon >= box.west && place.lon <= box.east) inside.push(place);
+    if (
+      place.lat >= box.south &&
+      place.lat <= box.north &&
+      place.lon >= box.west &&
+      place.lon <= box.east
+    )
+      inside.push(place);
   }
   const midLat = (box.south + box.north) / 2;
   const midLon = (box.west + box.east) / 2;
   const cosLat = Math.cos((midLat * Math.PI) / 180);
-  const distance = (place) => ((place.lat - midLat) ** 2) + (((place.lon - midLon) * cosLat) ** 2);
+  const distance = (place) =>
+    (place.lat - midLat) ** 2 + ((place.lon - midLon) * cosLat) ** 2;
   if (inside.length > cap) {
     inside.sort((a, b) => distance(a) - distance(b) || a.id - b.id);
   }
@@ -236,14 +257,23 @@ export const CHANNEL_ALIASES_PER_END = 2;
  * @returns {{channelCount:number, sameLocation:number, links:Array<object>}}
  */
 export function normalizeLightningChannels(payload) {
-  if (!Array.isArray(payload)) throw new Error('Lightning channels payload is not an array');
+  if (!Array.isArray(payload))
+    throw new Error('Lightning channels payload is not an array');
   const byPair = new Map();
   let channelCount = 0;
   let sameLocation = 0;
   for (const row of payload) {
     if (!Array.isArray(row) || row.length < 8) continue;
-    let a = { lat: coord(row[3]), lon: coord(row[2]), alias: cleanText(row[1], 40) };
-    let b = { lat: coord(row[7]), lon: coord(row[6]), alias: cleanText(row[5], 40) };
+    let a = {
+      lat: coord(row[3]),
+      lon: coord(row[2]),
+      alias: cleanText(row[1], 40),
+    };
+    let b = {
+      lat: coord(row[7]),
+      lon: coord(row[6]),
+      alias: cleanText(row[5], 40),
+    };
     if (!finiteLatLon(a.lat, a.lon) || !finiteLatLon(b.lat, b.lon)) continue;
     channelCount += 1;
     let aId = `${a.lat.toFixed(4)},${a.lon.toFixed(4)}`;
@@ -260,17 +290,27 @@ export function normalizeLightningChannels(payload) {
     const id = `${aId}|${bId}`;
     let link = byPair.get(id);
     if (!link) {
-      link = { id, a: { lat: a.lat, lon: a.lon }, b: { lat: b.lat, lon: b.lon }, channels: 0, aAliases: new Map(), bAliases: new Map() };
+      link = {
+        id,
+        a: { lat: a.lat, lon: a.lon },
+        b: { lat: b.lat, lon: b.lon },
+        channels: 0,
+        aAliases: new Map(),
+        bAliases: new Map(),
+      };
       byPair.set(id, link);
     }
     link.channels += 1;
-    if (a.alias) link.aAliases.set(a.alias, (link.aAliases.get(a.alias) || 0) + 1);
-    if (b.alias) link.bAliases.set(b.alias, (link.bAliases.get(b.alias) || 0) + 1);
+    if (a.alias)
+      link.aAliases.set(a.alias, (link.aAliases.get(a.alias) || 0) + 1);
+    if (b.alias)
+      link.bAliases.set(b.alias, (link.bAliases.get(b.alias) || 0) + 1);
   }
-  const topAliases = (counts) => [...counts.entries()]
-    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
-    .slice(0, CHANNEL_ALIASES_PER_END)
-    .map(([alias]) => alias);
+  const topAliases = (counts) =>
+    [...counts.entries()]
+      .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+      .slice(0, CHANNEL_ALIASES_PER_END)
+      .map(([alias]) => alias);
   const links = [...byPair.values()].map((link) => ({
     id: link.id,
     a: { ...link.a, aliases: topAliases(link.aAliases) },
@@ -307,7 +347,8 @@ function httpLink(value) {
  * @returns {{activeCount:?number, meetups:Array<object>}}
  */
 export function normalizeMeetups(meetups, events, now) {
-  if (!Array.isArray(meetups)) throw new Error('Meetups payload is not an array');
+  if (!Array.isArray(meetups))
+    throw new Error('Meetups payload is not an array');
   const lastByLink = new Map();
   const nextByLink = new Map();
   if (Array.isArray(events)) {
@@ -319,7 +360,8 @@ export function normalizeMeetups(meetups, events, now) {
         if (!(lastByLink.get(link) >= time)) lastByLink.set(link, time);
       } else if (time - now <= MEETUP_ACTIVE_WINDOW_MS) {
         const current = nextByLink.get(link);
-        if (!current || time < current.time) nextByLink.set(link, { time, event });
+        if (!current || time < current.time)
+          nextByLink.set(link, { time, event });
       }
     }
   }
@@ -329,16 +371,25 @@ export function normalizeMeetups(meetups, events, now) {
   for (const meetup of meetups) {
     const lat = coord(meetup?.latitude);
     const lon = coord(meetup?.longitude);
-    if (!Number.isInteger(meetup?.id) || !finiteLatLon(lat, lon) || (lat === 0 && lon === 0)) continue;
+    if (
+      !Number.isInteger(meetup?.id) ||
+      !finiteLatLon(lat, lon) ||
+      (lat === 0 && lon === 0)
+    )
+      continue;
     const portalLink = httpLink(meetup.portalLink);
     const lastEventAt = lastByLink.get(portalLink) ?? null;
     const upcoming = nextByLink.get(portalLink) || null;
     // The meetup's own next_event carries the venue even without the feed.
-    const ownNext = meetup.next_event && eventTime(meetup.next_event) > now ? meetup.next_event : null;
+    const ownNext =
+      meetup.next_event && eventTime(meetup.next_event) > now
+        ? meetup.next_event
+        : null;
     const next = upcoming ? upcoming.event : ownNext;
     const nextAt = next ? eventTime(next) : null;
     const active = statusKnown
-      ? Boolean(upcoming) || (lastEventAt !== null && now - lastEventAt <= MEETUP_ACTIVE_WINDOW_MS)
+      ? Boolean(upcoming) ||
+        (lastEventAt !== null && now - lastEventAt <= MEETUP_ACTIVE_WINDOW_MS)
       : null;
     if (active) activeCount += 1;
     records.push({
@@ -350,10 +401,16 @@ export function normalizeMeetups(meetups, events, now) {
       country: cleanText(meetup.country, 2).toUpperCase(),
       active,
       lastEventAt,
-      nextEvent: nextAt === null ? null : {
-        at: nextAt,
-        venue: cleanText(next.osm_name || next.location || next.osm_address, 100),
-      },
+      nextEvent:
+        nextAt === null
+          ? null
+          : {
+              at: nextAt,
+              venue: cleanText(
+                next.osm_name || next.location || next.osm_address,
+                100,
+              ),
+            },
       links: {
         portal: portalLink,
         chat: httpLink(meetup.url),

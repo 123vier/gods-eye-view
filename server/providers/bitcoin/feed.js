@@ -45,7 +45,12 @@ export function createCachedFeed({
     diskChecked = true;
     try {
       const parsed = JSON.parse(await fs.readFile(cachePath, 'utf8'));
-      if (Number.isFinite(parsed?.at) && parsed?.data && typeof parsed.data === 'object') mem = parsed;
+      if (
+        Number.isFinite(parsed?.at) &&
+        parsed?.data &&
+        typeof parsed.data === 'object'
+      )
+        mem = parsed;
     } catch {
       /* no disk cache yet */
     }
@@ -72,12 +77,16 @@ export function createCachedFeed({
           return entry;
         } catch (err) {
           const retryAfterMs = Number(err?.retryAfterMs);
-          cooldownUntil = now() + Math.max(
-            retryCooldownMs,
-            Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
-          );
+          cooldownUntil =
+            now() +
+            Math.max(
+              retryCooldownMs,
+              Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
+            );
           lastError = err?.message || String(err);
-          console.warn(`[${name}] refresh failed (${lastError}) — serving cache if any`);
+          console.warn(
+            `[${name}] refresh failed (${lastError}) — serving cache if any`,
+          );
           return null;
         }
       })();
@@ -97,7 +106,8 @@ export function createCachedFeed({
       await readDiskOnce();
       const entry = mem;
       if (entry && now() - entry.at < ttlMs) return { ...entry, stale: false };
-      if (now() < cooldownUntil) return entry ? { ...entry, stale: true } : null;
+      if (now() < cooldownUntil)
+        return entry ? { ...entry, stale: true } : null;
       const fresh = await refresh();
       if (fresh) return { ...fresh, stale: false };
       return entry ? { ...entry, stale: true } : null;
@@ -133,7 +143,8 @@ export async function fetchUpstreamJson(url, signal, maxBytes, readJsonCapped) {
   if (!response.ok) {
     const err = new Error(`HTTP ${response.status}`);
     const retryAfter = Number(response.headers.get('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfterMs = retryAfter * 1000;
+    if (Number.isFinite(retryAfter) && retryAfter > 0)
+      err.retryAfterMs = retryAfter * 1000;
     throw err;
   }
   return readJsonCapped(response, maxBytes);

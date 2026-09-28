@@ -18,7 +18,7 @@ import {
 } from './groundFloor.js';
 import { horizonOccluder } from './iconOrientation.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
-import bitcoinChannelsLayer from './bitcoinChannels.js';
+import { createBitcoinChannelsLayer } from './bitcoinChannels.js';
 
 /**
  * Bitcoin network + economy layers: Lightning node locations (mempool.space;
@@ -99,7 +99,15 @@ function iconDataUrl(width, height, paint) {
 }
 
 /** Lightning bolt outline in unit coordinates (x right, y down). */
-const BOLT_POINTS = [[0.64, 0], [0.06, 0.58], [0.44, 0.58], [0.3, 1], [0.94, 0.38], [0.56, 0.38], [0.8, 0]];
+const BOLT_POINTS = [
+  [0.64, 0],
+  [0.06, 0.58],
+  [0.44, 0.58],
+  [0.3, 1],
+  [0.94, 0.38],
+  [0.56, 0.38],
+  [0.8, 0],
+];
 
 function boltIcon(fill, stroke) {
   const width = 40;
@@ -241,13 +249,18 @@ export function boltHeight(capacitySat) {
 export function lightningRecord(location) {
   const count = Number(location.nodeCount) || 0;
   const top = Array.isArray(location.top) ? location.top : [];
-  const names = top.map((node) => node.alias || `${String(node.pubkey).slice(0, 10)}…`);
-  const title = count === 1 ? (names[0] || 'Lightning node') : `${count} Lightning nodes`;
+  const names = top.map(
+    (node) => node.alias || `${String(node.pubkey).slice(0, 10)}…`,
+  );
+  const title =
+    count === 1 ? names[0] || 'Lightning node' : `${count} Lightning nodes`;
   const summary = [
     formatBtc(location.capacitySat),
     `${Number(location.channels) || 0} channels`,
     location.country,
-  ].filter(Boolean).join(' · ');
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const details = [summary];
   if (count > 1 && names.length) details.push(`Top: ${names.join(', ')}`);
   details.push('IP-geolocated · approximate');
@@ -287,7 +300,10 @@ export function nodeRecord(location) {
     markerWidth: 13,
     markerHeight: 13,
     title: 'Bitcoin full node location',
-    details: ['Reachable node(s) · IP-geolocated · approximate', 'Tor nodes have no location and are not shown'],
+    details: [
+      'Reachable node(s) · IP-geolocated · approximate',
+      'Tor nodes have no location and are not shown',
+    ],
     properties: {},
   };
 }
@@ -298,7 +314,7 @@ export function nodeRecord(location) {
  * @returns {object}
  */
 export function merchantRecord(place) {
-  const category = place.atm ? 'Bitcoin ATM' : (place.category || 'other');
+  const category = place.atm ? 'Bitcoin ATM' : place.category || 'other';
   const headline = [
     category.charAt(0).toUpperCase() + category.slice(1),
     place.verifiedAt ? `verified ${place.verifiedAt}` : 'unverified',
@@ -333,7 +349,11 @@ export function merchantRecord(place) {
  */
 export function formatEventTime(epochMs, timeZone) {
   return new Date(epochMs).toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
     ...(timeZone ? { timeZone } : {}),
   });
 }
@@ -349,12 +369,18 @@ export function meetupRecord(meetup, timeZone) {
   const details = [];
   if (place) details.push(place);
   if (meetup.nextEvent) {
-    details.push(`Next: ${formatEventTime(meetup.nextEvent.at, timeZone)}${meetup.nextEvent.venue ? ` · ${meetup.nextEvent.venue}` : ''}`);
+    details.push(
+      `Next: ${formatEventTime(meetup.nextEvent.at, timeZone)}${meetup.nextEvent.venue ? ` · ${meetup.nextEvent.venue}` : ''}`,
+    );
   } else if (meetup.lastEventAt) {
-    details.push(`Last meetup: ${formatEventTime(meetup.lastEventAt, timeZone).split(',')[0]}`);
+    details.push(
+      `Last meetup: ${formatEventTime(meetup.lastEventAt, timeZone).split(',')[0]}`,
+    );
   }
-  if (meetup.active === true) details.push('Active · met or meets within 6 months');
-  else if (meetup.active === false) details.push('Inactive · no meetup within 6 months');
+  if (meetup.active === true)
+    details.push('Active · met or meets within 6 months');
+  else if (meetup.active === false)
+    details.push('Inactive · no meetup within 6 months');
   else details.push('Activity unknown');
   const inactive = meetup.active === false;
   return {
@@ -372,9 +398,14 @@ export function meetupRecord(meetup, timeZone) {
       city: meetup.city || null,
       country: meetup.country || null,
       active: meetup.active,
-      lastEventAt: meetup.lastEventAt ? new Date(meetup.lastEventAt).toISOString() : null,
+      lastEventAt: meetup.lastEventAt
+        ? new Date(meetup.lastEventAt).toISOString()
+        : null,
       nextEvent: meetup.nextEvent
-        ? { at: new Date(meetup.nextEvent.at).toISOString(), venue: meetup.nextEvent.venue || null }
+        ? {
+            at: new Date(meetup.nextEvent.at).toISOString(),
+            venue: meetup.nextEvent.venue || null,
+          }
         : null,
       links: meetup.links || {},
     },
@@ -395,9 +426,19 @@ export function merchantRequestBox(view) {
   const height = north - south;
   const width = east - west;
   if (height <= 0 || width <= 0) return null;
-  if (height > MERCHANT_VIEWPORT_MAX_DEGREES || width > MERCHANT_VIEWPORT_MAX_DEGREES) return null;
-  const padLat = Math.min(height * MERCHANT_VIEWPORT_PAD_RATIO, (MERCHANT_VIEWPORT_MAX_DEGREES - height) / 2);
-  const padLon = Math.min(width * MERCHANT_VIEWPORT_PAD_RATIO, (MERCHANT_VIEWPORT_MAX_DEGREES - width) / 2);
+  if (
+    height > MERCHANT_VIEWPORT_MAX_DEGREES ||
+    width > MERCHANT_VIEWPORT_MAX_DEGREES
+  )
+    return null;
+  const padLat = Math.min(
+    height * MERCHANT_VIEWPORT_PAD_RATIO,
+    (MERCHANT_VIEWPORT_MAX_DEGREES - height) / 2,
+  );
+  const padLon = Math.min(
+    width * MERCHANT_VIEWPORT_PAD_RATIO,
+    (MERCHANT_VIEWPORT_MAX_DEGREES - width) / 2,
+  );
   return {
     south: Math.max(-90, south - padLat),
     north: Math.min(90, north + padLat),
@@ -411,13 +452,19 @@ export function merchantRequestBox(view) {
  * @returns {boolean}
  */
 export function boxContains(outer, inner) {
-  return Boolean(outer && inner)
-    && inner.south >= outer.south && inner.north <= outer.north
-    && inner.west >= outer.west && inner.east <= outer.east;
+  return (
+    Boolean(outer && inner) &&
+    inner.south >= outer.south &&
+    inner.north <= outer.north &&
+    inner.west >= outer.west &&
+    inner.east <= outer.east
+  );
 }
 
 function viewRectangleDegrees(viewer) {
-  const rectangle = viewer?.camera?.computeViewRectangle(viewer.scene.globe.ellipsoid);
+  const rectangle = viewer?.camera?.computeViewRectangle(
+    viewer.scene.globe.ellipsoid,
+  );
   if (!rectangle) return null;
   return {
     south: Cesium.Math.toDegrees(rectangle.south),
@@ -446,11 +493,15 @@ function viewRectangleDegrees(viewer) {
  * @param {object} [deps] Test seams.
  * @returns {object} Data layer implementing the manager contract.
  */
-export function createBitcoinPointLayer(config, {
-  overlayHost = DEFAULT_OVERLAY_HOST,
-  fetchImpl = (...args) => globalThis.fetch(...args),
-  screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
-} = {}) {
+export function createBitcoinPointLayer(
+  config,
+  {
+    overlayHost = DEFAULT_OVERLAY_HOST,
+    fetchImpl = (...args) => globalThis.fetch(...args),
+    screenSpaceEventHandlerFactory = (canvas) =>
+      new Cesium.ScreenSpaceEventHandler(canvas),
+  } = {},
+) {
   const {
     id,
     name,
@@ -518,27 +569,33 @@ export function createBitcoinPointLayer(config, {
     if (state.selectedId && state.selectedId !== key) clearSelection();
     state.selectedId = key;
     styleMarker(entry, true);
-    overlayHost.setEntries(selectedOverlayId, [{
-      id: key,
-      position: entry.point.position,
-      variant: 'selected',
-      selected: true,
-      protected: true,
-      paintLane: 'selected',
-      collisionGroup: 'ambient-card',
-      priority: Number.MAX_SAFE_INTEGER,
-      title: entry.record.title,
-      details: entry.record.details,
-      accent: entry.record.color,
-      interactive: false,
-      anchorRadiusPx: 9,
-      minAnchorGapPx: 11,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    }], SELECTED_OVERLAY_OPTIONS);
+    overlayHost.setEntries(
+      selectedOverlayId,
+      [
+        {
+          id: key,
+          position: entry.point.position,
+          variant: 'selected',
+          selected: true,
+          protected: true,
+          paintLane: 'selected',
+          collisionGroup: 'ambient-card',
+          priority: Number.MAX_SAFE_INTEGER,
+          title: entry.record.title,
+          details: entry.record.details,
+          accent: entry.record.color,
+          interactive: false,
+          anchorRadiusPx: 9,
+          minAnchorGapPx: 11,
+          verticalOnly: true,
+          placement: 'above',
+          edgeFade: 'keyhole',
+          horizonCull: true,
+          terrainOcclusion: false,
+        },
+      ],
+      SELECTED_OVERLAY_OPTIONS,
+    );
     // Selection context lets voice ("what is this?") read the clicked point.
     const carrier = { id: key };
     registerEntityContext(carrier, {
@@ -577,19 +634,27 @@ export function createBitcoinPointLayer(config, {
 
   function styleMarker(entry, selected) {
     if (useIcons) {
-      entry.point.image = selected ? images.selected : images[entry.record.markerKey || 'normal'];
+      entry.point.image = selected
+        ? images.selected
+        : images[entry.record.markerKey || 'normal'];
       entry.point.scale = selected ? 1.5 : 1;
       renderUntilIconReady(entry.point);
       return;
     }
-    entry.point.color = Cesium.Color.fromCssColorString(selected ? COLORS.selected : entry.record.color);
+    entry.point.color = Cesium.Color.fromCssColorString(
+      selected ? COLORS.selected : entry.record.color,
+    );
     entry.point.pixelSize = entry.record.pixelSize + (selected ? 4 : 0);
   }
 
   function addMarker(key, record) {
     const common = {
       id: key,
-      position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat, pointHeight(record)),
+      position: Cesium.Cartesian3.fromDegrees(
+        record.lon,
+        record.lat,
+        pointHeight(record),
+      ),
       scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.2, 2.0e7, 0.6),
       // The Cesium globe is hidden (3D tiles are the planet), so nothing
       // writes far-side depth: markers draw on top and the horizon pass
@@ -669,8 +734,13 @@ export function createBitcoinPointLayer(config, {
 
   async function loadGlobal({ force = false } = {}) {
     if (!state.enabled || !state.viewer) return;
-    if (!force && state.rendered.size && state.lastUpdate
-      && Date.now() - state.lastUpdate < Math.max(60_000, refreshInterval / 2)) return;
+    if (
+      !force &&
+      state.rendered.size &&
+      state.lastUpdate &&
+      Date.now() - state.lastUpdate < Math.max(60_000, refreshInterval / 2)
+    )
+      return;
     state.abort?.abort();
     const abort = new AbortController();
     state.abort = abort;
@@ -719,7 +789,8 @@ export function createBitcoinPointLayer(config, {
       return;
     }
     // Zooming in within a complete earlier answer needs no new request.
-    if (state.requestedComplete && boxContains(state.requestedBox, view)) return;
+    if (state.requestedComplete && boxContains(state.requestedBox, view))
+      return;
     state.abort?.abort();
     const abort = new AbortController();
     state.abort = abort;
@@ -732,7 +803,9 @@ export function createBitcoinPointLayer(config, {
       if (abort.signal.aborted || !state.enabled) return;
       const records = toRecords(payload);
       if (groundClamp && records.length) {
-        await resolveGroundFloorCellsBounded(records.map((record) => ({ lat: record.lat, lon: record.lon })));
+        await resolveGroundFloorCellsBounded(
+          records.map((record) => ({ lat: record.lat, lon: record.lon })),
+        );
         if (abort.signal.aborted || !state.enabled) return;
       }
       render(records);
@@ -742,7 +815,11 @@ export function createBitcoinPointLayer(config, {
       state.stale = payload?.stale === true;
       state.fetchedAt = Number(payload?.fetchedAt) || null;
       state.lastUpdate = Date.now();
-      state.status = records.length ? (state.stale ? 'stale' : 'ready') : 'empty';
+      state.status = records.length
+        ? state.stale
+          ? 'stale'
+          : 'ready'
+        : 'empty';
       state.statusLabel = summary(payload);
     } catch (error) {
       if (error?.name === 'AbortError' || abort.signal.aborted) return;
@@ -777,9 +854,10 @@ export function createBitcoinPointLayer(config, {
     state.clickHandler.setInputAction((click) => {
       if (!state.enabled) return;
       const picked = viewer.scene.pick(click.position);
-      const key = picked?.collection === state.points && typeof picked.id === 'string'
-        ? picked.id
-        : null;
+      const key =
+        picked?.collection === state.points && typeof picked.id === 'string'
+          ? picked.id
+          : null;
       if (key && state.rendered.has(key)) {
         if (key !== state.selectedId) select(key);
         return;
@@ -794,14 +872,18 @@ export function createBitcoinPointLayer(config, {
     icon,
     source,
     updateInterval: 0,
-    ...(mode === 'global' ? { refreshInterval } : { statsRefreshInterval: 1000 }),
+    ...(mode === 'global'
+      ? { refreshInterval }
+      : { statsRefreshInterval: 1000 }),
 
     init(viewer) {
       state.viewer = viewer;
       if (useIcons) {
         images = markerImages();
         // Icons have soft anti-aliased edges, so they blend translucently.
-        state.points = new Cesium.BillboardCollection({ blendOption: Cesium.BlendOption.TRANSLUCENT });
+        state.points = new Cesium.BillboardCollection({
+          blendOption: Cesium.BlendOption.TRANSLUCENT,
+        });
       } else {
         state.points = new Cesium.PointPrimitiveCollection({
           // Opaque colors + opaque outline → a single opaque pass.
@@ -818,8 +900,11 @@ export function createBitcoinPointLayer(config, {
       overlayHost.setVisible(selectedOverlayId, true);
       registerPickOwner(id, (picked) => state.rendered.has(picked));
       installClickHandler(state.viewer);
-      state.moveEndRemove = state.viewer.camera.moveEnd.addEventListener(onMoveEnd);
-      state.preRenderRemove = state.viewer.scene.preRender.addEventListener(() => cullBehindHorizon());
+      state.moveEndRemove =
+        state.viewer.camera.moveEnd.addEventListener(onMoveEnd);
+      state.preRenderRemove = state.viewer.scene.preRender.addEventListener(
+        () => cullBehindHorizon(),
+      );
       cullBehindHorizon(true);
       requestRender('enable');
       // The manager calls update() right after enable(); it owns the first load.
@@ -885,7 +970,7 @@ export function createBitcoinPointLayer(config, {
   };
 }
 
-export const bitcoinLightningLayer = createBitcoinPointLayer({
+const LIGHTNING_LAYER_CONFIG = Object.freeze({
   id: BITCOIN_LIGHTNING_LAYER_ID,
   name: 'Lightning Nodes',
   icon: '⚡',
@@ -894,11 +979,15 @@ export const bitcoinLightningLayer = createBitcoinPointLayer({
   mode: 'global',
   markerImages: LIGHTNING_MARKER_IMAGES,
   refreshInterval: 60 * 60_000,
-  toRecords: (payload) => (Array.isArray(payload?.locations) ? payload.locations : []).map(lightningRecord),
-  summary: (payload) => `${Number(payload?.nodeCount || 0).toLocaleString('en-US')} nodes · ${(payload?.locations?.length || 0).toLocaleString('en-US')} locations`,
+  toRecords: (payload) =>
+    (Array.isArray(payload?.locations) ? payload.locations : []).map(
+      lightningRecord,
+    ),
+  summary: (payload) =>
+    `${Number(payload?.nodeCount || 0).toLocaleString('en-US')} nodes · ${(payload?.locations?.length || 0).toLocaleString('en-US')} locations`,
 });
 
-export const bitcoinNodesLayer = createBitcoinPointLayer({
+const NODES_LAYER_CONFIG = Object.freeze({
   id: BITCOIN_NODES_LAYER_ID,
   name: 'Bitcoin Full Nodes',
   icon: '₿',
@@ -907,7 +996,10 @@ export const bitcoinNodesLayer = createBitcoinPointLayer({
   mode: 'global',
   markerImages: NODE_MARKER_IMAGES,
   refreshInterval: 6 * 60 * 60_000,
-  toRecords: (payload) => (Array.isArray(payload?.locations) ? payload.locations : []).map(nodeRecord),
+  toRecords: (payload) =>
+    (Array.isArray(payload?.locations) ? payload.locations : []).map(
+      nodeRecord,
+    ),
   summary: (payload) => {
     const total = Number(payload?.totalNodes);
     const located = (payload?.locations?.length || 0).toLocaleString('en-US');
@@ -917,7 +1009,7 @@ export const bitcoinNodesLayer = createBitcoinPointLayer({
   },
 });
 
-export const bitcoinMerchantsLayer = createBitcoinPointLayer({
+const MERCHANTS_LAYER_CONFIG = Object.freeze({
   id: BITCOIN_MERCHANTS_LAYER_ID,
   name: 'Bitcoin Merchants',
   icon: '🏪',
@@ -925,7 +1017,8 @@ export const bitcoinMerchantsLayer = createBitcoinPointLayer({
   route: 'merchants',
   mode: 'viewport',
   groundClamp: true,
-  toRecords: (payload) => (Array.isArray(payload?.places) ? payload.places : []).map(merchantRecord),
+  toRecords: (payload) =>
+    (Array.isArray(payload?.places) ? payload.places : []).map(merchantRecord),
   summary: (payload) => {
     const shown = payload?.places?.length || 0;
     return payload?.truncated
@@ -934,7 +1027,7 @@ export const bitcoinMerchantsLayer = createBitcoinPointLayer({
   },
 });
 
-export const bitcoinMeetupsLayer = createBitcoinPointLayer({
+const MEETUPS_LAYER_CONFIG = Object.freeze({
   id: BITCOIN_MEETUPS_LAYER_ID,
   name: 'Bitcoin Meetups',
   icon: '㉑',
@@ -944,20 +1037,32 @@ export const bitcoinMeetupsLayer = createBitcoinPointLayer({
   refreshInterval: 6 * 60 * 60_000,
   markerImages: MEETUP_MARKER_IMAGES,
   // Active meetups last, so they draw above faded inactive badges.
-  toRecords: (payload) => (Array.isArray(payload?.meetups) ? payload.meetups : [])
-    .map((meetup) => meetupRecord(meetup))
-    .sort((a, b) => (a.markerKey === 'inactive' ? 0 : 1) - (b.markerKey === 'inactive' ? 0 : 1)),
+  toRecords: (payload) =>
+    (Array.isArray(payload?.meetups) ? payload.meetups : [])
+      .map((meetup) => meetupRecord(meetup))
+      .sort(
+        (a, b) =>
+          (a.markerKey === 'inactive' ? 0 : 1) -
+          (b.markerKey === 'inactive' ? 0 : 1),
+      ),
   summary: (payload) => {
     const total = payload?.meetups?.length || 0;
     const active = Number(payload?.activeCount);
-    return Number.isFinite(active) ? `${total} meetups · ${active} active` : `${total} meetups`;
+    return Number.isFinite(active)
+      ? `${total} meetups · ${active} active`
+      : `${total} meetups`;
   },
 });
 
-export default [
-  bitcoinLightningLayer,
-  bitcoinChannelsLayer,
-  bitcoinNodesLayer,
-  bitcoinMerchantsLayer,
-  bitcoinMeetupsLayer,
-];
+/** Fresh layer instances for one application catalog. */
+export function createBitcoinLayers() {
+  return [
+    createBitcoinPointLayer(LIGHTNING_LAYER_CONFIG),
+    createBitcoinChannelsLayer(),
+    createBitcoinPointLayer(NODES_LAYER_CONFIG),
+    createBitcoinPointLayer(MERCHANTS_LAYER_CONFIG),
+    createBitcoinPointLayer(MEETUPS_LAYER_CONFIG),
+  ];
+}
+
+export default createBitcoinLayers();

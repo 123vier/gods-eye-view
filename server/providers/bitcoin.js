@@ -15,10 +15,13 @@ const HOUR_MS = 60 * 60_000;
 const LIGHTNING_URL = 'https://mempool.space/api/v1/lightning/nodes/world';
 const CHANNELS_URL = 'https://mempool.space/api/v1/lightning/channels-geo';
 // bitnodes.io now redirects here; the public API allows 10 requests/day/IP.
-const BITNODES_URL = 'https://btcnodes.io/api/v1/snapshots/latest/?field=coordinates';
+const BITNODES_URL =
+  'https://btcnodes.io/api/v1/snapshots/latest/?field=coordinates';
 const MEETUPS_URL = 'https://portal.einundzwanzig.space/api/meetups';
-const MEETUP_EVENTS_URL = 'https://portal.einundzwanzig.space/api/meetup-events';
-const BTCMAP_URL = 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon,address,website,opening_hours,verified_at';
+const MEETUP_EVENTS_URL =
+  'https://portal.einundzwanzig.space/api/meetup-events';
+const BTCMAP_URL =
+  'https://api.btcmap.org/v4/places?fields=id,lat,lon,name,icon,address,website,opening_hours,verified_at';
 
 /**
  * Bitcoin network + economy proxy: three independent keyless feeds, each
@@ -45,39 +48,70 @@ export function bitcoinProxy() {
       name: 'bitcoin-lightning',
       ttlMs: HOUR_MS,
       retryCooldownMs: 10 * 60_000,
-      load: async (signal) => normalizeLightningWorld(
-        await fetchUpstreamJson(LIGHTNING_URL, signal, 8 * 1024 * 1024, readResponseJsonCapped),
-      ),
+      load: async (signal) =>
+        normalizeLightningWorld(
+          await fetchUpstreamJson(
+            LIGHTNING_URL,
+            signal,
+            8 * 1024 * 1024,
+            readResponseJsonCapped,
+          ),
+        ),
     }),
     channels: createCachedFeed({
       name: 'bitcoin-channels',
       ttlMs: HOUR_MS,
       retryCooldownMs: 10 * 60_000,
-      load: async (signal) => normalizeLightningChannels(
-        await fetchUpstreamJson(CHANNELS_URL, signal, 8 * 1024 * 1024, readResponseJsonCapped),
-      ),
+      load: async (signal) =>
+        normalizeLightningChannels(
+          await fetchUpstreamJson(
+            CHANNELS_URL,
+            signal,
+            8 * 1024 * 1024,
+            readResponseJsonCapped,
+          ),
+        ),
     }),
     nodes: createCachedFeed({
       name: 'bitcoin-nodes',
       ttlMs: 24 * HOUR_MS,
       // 10 calls/day: after a failure wait three hours before trying again.
       retryCooldownMs: 3 * HOUR_MS,
-      load: async (signal) => normalizeBitnodesCoordinates(
-        await fetchUpstreamJson(BITNODES_URL, signal, 2 * 1024 * 1024, readResponseJsonCapped),
-      ),
+      load: async (signal) =>
+        normalizeBitnodesCoordinates(
+          await fetchUpstreamJson(
+            BITNODES_URL,
+            signal,
+            2 * 1024 * 1024,
+            readResponseJsonCapped,
+          ),
+        ),
     }),
     meetups: createCachedFeed({
       name: 'bitcoin-meetups',
       ttlMs: 24 * HOUR_MS,
       retryCooldownMs: 30 * 60_000,
       load: async (signal) => {
-        const meetups = await fetchUpstreamJson(MEETUPS_URL, signal, 4 * 1024 * 1024, readResponseJsonCapped);
+        const meetups = await fetchUpstreamJson(
+          MEETUPS_URL,
+          signal,
+          4 * 1024 * 1024,
+          readResponseJsonCapped,
+        );
         // Status is optional: without the events feed the meetups still map.
         let events = null;
         try {
-          events = await fetchUpstreamJson(MEETUP_EVENTS_URL, signal, 24 * 1024 * 1024, readResponseJsonCapped);
+          events = await fetchUpstreamJson(
+            MEETUP_EVENTS_URL,
+            signal,
+            24 * 1024 * 1024,
+            readResponseJsonCapped,
+          );
         } catch (err) {
-          console.warn('[bitcoin-meetups] events unavailable, status unknown:', err?.message || err);
+          console.warn(
+            '[bitcoin-meetups] events unavailable, status unknown:',
+            err?.message || err,
+          );
         }
         return normalizeMeetups(meetups, events, Date.now());
       },
@@ -88,7 +122,12 @@ export function bitcoinProxy() {
       retryCooldownMs: 30 * 60_000,
       load: async (signal) => ({
         places: normalizeBtcMapPlaces(
-          await fetchUpstreamJson(BTCMAP_URL, signal, 40 * 1024 * 1024, readResponseJsonCapped),
+          await fetchUpstreamJson(
+            BTCMAP_URL,
+            signal,
+            40 * 1024 * 1024,
+            readResponseJsonCapped,
+          ),
         ),
       }),
     }),
@@ -113,21 +152,28 @@ export function bitcoinProxy() {
         const route = url.pathname.replace(/\/+$/, '') || '/';
 
         if (route === '/status') {
-          sendJson(200, Object.fromEntries(
-            Object.entries(feeds).map(([key, feed]) => [key, feed.status()]),
-          ));
+          sendJson(
+            200,
+            Object.fromEntries(
+              Object.entries(feeds).map(([key, feed]) => [key, feed.status()]),
+            ),
+          );
           return;
         }
 
         if (route === '/merchants') {
           const box = parseMerchantBox(url.searchParams);
           if (!box) {
-            sendJson(400, { error: 'viewport must be a valid box of at most 10° per side' });
+            sendJson(400, {
+              error: 'viewport must be a valid box of at most 10° per side',
+            });
             return;
           }
           const entry = await feeds.merchants.get();
           if (!entry) {
-            sendJson(502, { error: 'BTC Map unavailable and no cache available' });
+            sendJson(502, {
+              error: 'BTC Map unavailable and no cache available',
+            });
             return;
           }
           sendJson(200, {
@@ -138,21 +184,32 @@ export function bitcoinProxy() {
           return;
         }
 
-        const feed = route === '/lightning' ? feeds.lightning
-          : route === '/channels' ? feeds.channels
-            : route === '/nodes' ? feeds.nodes
-              : route === '/meetups' ? feeds.meetups
-                : null;
+        const feed =
+          route === '/lightning'
+            ? feeds.lightning
+            : route === '/channels'
+              ? feeds.channels
+              : route === '/nodes'
+                ? feeds.nodes
+                : route === '/meetups'
+                  ? feeds.meetups
+                  : null;
         if (!feed) {
           sendJson(404, { error: 'unknown bitcoin route' });
           return;
         }
         const entry = await feed.get();
         if (!entry) {
-          sendJson(502, { error: 'upstream unavailable and no cache available' });
+          sendJson(502, {
+            error: 'upstream unavailable and no cache available',
+          });
           return;
         }
-        sendJson(200, { fetchedAt: entry.at, stale: entry.stale, ...entry.data });
+        sendJson(200, {
+          fetchedAt: entry.at,
+          stale: entry.stale,
+          ...entry.data,
+        });
       } catch (err) {
         console.warn('[bitcoin-proxy] error:', err?.message || err);
         sendJson(500, { error: 'bitcoin proxy error' });

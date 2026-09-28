@@ -11,7 +11,7 @@ const SYSTEM_PROMPT = [
   'Translate the command into tool calls. This is a single turn: you will NOT see tool results, so emit EVERY tool call the command needs in this one response, in the order they should run. Never ask questions.',
   'For fly_to_location use `query` with a precise, geocodable place name (e.g. "John F. Kennedy International Airport, New York").',
   'To circle / orbit around a place: fly_to_location, then move_camera with motion=orbit and mode=continuous.',
-  'If no tool fits, reply with at most one short sentence in the operator\'s language instead; otherwise add no text.',
+  "If no tool fits, reply with at most one short sentence in the operator's language instead; otherwise add no text.",
 ].join(' ');
 
 /** First sentence, capped — the voice descriptions are written for a long spoken session. */
@@ -45,7 +45,9 @@ export function textCommandTools(tools = GEV_REALTIME_TOOLS) {
       function: {
         name: tool.name,
         description: shortDescription(tool.description, 240),
-        parameters: compactSchema(tool.parameters || { type: 'object', properties: {} }),
+        parameters: compactSchema(
+          tool.parameters || { type: 'object', properties: {} },
+        ),
       },
     }));
 }
@@ -74,7 +76,9 @@ function sendJson(res, statusCode, payload) {
 
 async function handleTextCommand(req, res) {
   const apiKey = String(process.env.OPENROUTER_API_KEY || '').trim();
-  const model = String(process.env.OPENROUTER_MODEL || '').trim() || OPENROUTER_MODEL_DEFAULT;
+  const model =
+    String(process.env.OPENROUTER_MODEL || '').trim() ||
+    OPENROUTER_MODEL_DEFAULT;
 
   if (req.method === 'GET') {
     sendJson(res, 200, { configured: !!apiKey, model: apiKey ? model : null });
@@ -91,7 +95,9 @@ async function handleTextCommand(req, res) {
 
   try {
     const body = JSON.parse((await readRequestBody(req, 16 * 1024)) || '{}');
-    const text = String(body.text || '').trim().slice(0, MAX_TEXT_LENGTH);
+    const text = String(body.text || '')
+      .trim()
+      .slice(0, MAX_TEXT_LENGTH);
     if (!text) {
       sendJson(res, 400, { error: 'Empty command' });
       return;
@@ -119,7 +125,11 @@ async function handleTextCommand(req, res) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      sendJson(res, 502, { error: data?.error?.message || `OpenRouter request failed (${response.status})` });
+      sendJson(res, 502, {
+        error:
+          data?.error?.message ||
+          `OpenRouter request failed (${response.status})`,
+      });
       return;
     }
     const message = data?.choices?.[0]?.message;
@@ -149,4 +159,8 @@ function openRouterTextCommandProxy() {
   };
 }
 
-export { handleTextCommand, openRouterTextCommandProxy, OPENROUTER_MODEL_DEFAULT };
+export {
+  handleTextCommand,
+  openRouterTextCommandProxy,
+  OPENROUTER_MODEL_DEFAULT,
+};

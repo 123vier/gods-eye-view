@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { build, createServer, preview } from 'vite';
 import { localProviderPlugins } from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
+import { makeFixtureRoot } from './fixtureRoot.mjs';
 
 test('data providers have both hooks; credential editing stays development-only', () => {
-  for (const plugin of localProviderPlugins()) {
+  const plugins = localProviderPlugins();
+  assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
+  for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
       assert.equal(
@@ -27,7 +29,9 @@ test('data providers have both hooks; credential editing stays development-only'
 });
 
 test('real dev and built-preview servers serve provider JSON and terminate unknown APIs', async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), 'gev-preview-'));
+  // Physical path: Vite's root and the files written under it must agree on one
+  // spelling, and macOS reaches the temp directory through a symlink.
+  const root = await makeFixtureRoot('gev-preview-');
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(
     path.join(root, 'index.html'),
@@ -97,6 +101,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/adsblol/mil', 200],
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
+        ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/cctv/sources', 200],
