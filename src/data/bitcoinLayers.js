@@ -53,6 +53,7 @@ const COLORS = Object.freeze({
   // Main fill of the ⚡ emoji (Noto Color Emoji) shown in the layer menu.
   lightning: '#ffc927',
   node: '#f7931a',
+  meetupRim: '#ff8a00',
   merchant: '#3ddc84',
   atm: '#4dd0e1',
   selected: '#ffffff',
@@ -176,12 +177,12 @@ function coinIcon(disc, mark) {
  * @param {string} mark Text colour.
  * @param {number} [alpha=1] Whole-badge opacity (inactive meetups fade).
  */
-function diamondBadgeIcon(fill, border, mark, alpha = 1) {
+function diamondBadgeIcon(fill, border, mark, { glow = null } = {}) {
   const size = 64;
   const c = size / 2;
-  const r = c - 4;
+  // Inset leaves room for the halo and the optional glow inside the canvas.
+  const r = c - 9;
   return iconDataUrl(size, size, (ctx) => {
-    ctx.globalAlpha = alpha;
     ctx.beginPath();
     ctx.moveTo(c, c - r);
     ctx.lineTo(c + r, c);
@@ -190,14 +191,19 @@ function diamondBadgeIcon(fill, border, mark, alpha = 1) {
     ctx.closePath();
     ctx.lineJoin = 'round';
     // Dark halo under the coloured border keeps the edge crisp on any imagery.
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 10;
     ctx.strokeStyle = '#111111';
     ctx.stroke();
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 6;
     ctx.strokeStyle = border;
+    if (glow) {
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 8;
+    }
     ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.fillStyle = mark;
     ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
     ctx.textAlign = 'center';
@@ -212,10 +218,15 @@ export const LIGHTNING_MARKER_IMAGES = () => ({
   selected: boltIcon(COLORS.selected, COLORS.lightning),
 });
 export const MEETUP_MARKER_IMAGES = () => ({
-  normal: diamondBadgeIcon('#ffffff', COLORS.node, COLORS.node),
-  // Dark slate with a light rim: legible, yet clearly not the white/orange active badge.
-  inactive: diamondBadgeIcon('#46505a', '#b8c0c8', '#f0f2f4'),
-  selected: diamondBadgeIcon(COLORS.node, '#ffffff', '#ffffff'),
+  // Bright glowing orange rim so meetups stand out on any imagery.
+  normal: diamondBadgeIcon('#ffffff', COLORS.meetupRim, COLORS.node, {
+    glow: COLORS.meetupRim,
+  }),
+  // Dark slate inside the same orange rim: still findable, clearly not active.
+  inactive: diamondBadgeIcon('#46505a', COLORS.meetupRim, '#f0f2f4'),
+  selected: diamondBadgeIcon(COLORS.node, '#ffffff', '#ffffff', {
+    glow: '#ffffff',
+  }),
 });
 export const NODE_MARKER_IMAGES = () => ({
   normal: coinIcon(COLORS.node, '#ffffff'),
@@ -391,8 +402,8 @@ export function meetupRecord(meetup, timeZone) {
     color: COLORS.node,
     pixelSize: 6,
     markerKey: inactive ? 'inactive' : 'normal',
-    markerWidth: inactive ? 22 : 26,
-    markerHeight: inactive ? 22 : 26,
+    markerWidth: inactive ? 27 : 32,
+    markerHeight: inactive ? 27 : 32,
     title: meetup.name,
     details,
     properties: {
