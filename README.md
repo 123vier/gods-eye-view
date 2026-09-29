@@ -2,6 +2,11 @@
 
 # 🌐 God's Eye View
 
+[I added a textfield, so if you do not have the voice connection to speak with your GEV, there's a text field you can type your prompt in, connected via OpenRouter (Claude Haiku 4.5 by default).
+- Just for fun, also added various Bitcoin data sources such as full nodes (incomplete data), LN Nodes and channels, Einundzwanzig Meetups)]
+
+This is a fork of [bilawalsidhu/gods-eye-view](https://github.com/bilawalsidhu/gods-eye-view); everything below is the original README.
+
 [![CI](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml) [![Reached #1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://x.com/bilawalsidhu/status/2093798887815348521)
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
