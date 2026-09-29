@@ -50,7 +50,8 @@ const ICON_READY_POLL_MS = 100;
 const ICON_READY_POLL_LIMIT = 20;
 
 const COLORS = Object.freeze({
-  lightning: '#b98cff',
+  // Main fill of the ⚡ emoji (Noto Color Emoji) shown in the layer menu.
+  lightning: '#ffc927',
   node: '#f7931a',
   merchant: '#3ddc84',
   atm: '#4dd0e1',
@@ -235,10 +236,10 @@ export function lightningPixelSize(capacitySat) {
 /**
  * Bolt icon height for a Lightning location, following the point-size scale.
  * @param {number} capacitySat
- * @returns {number} Pixel height in [16, 30].
+ * @returns {number} Pixel height in [22, 42].
  */
 export function boltHeight(capacitySat) {
-  return 16 + (lightningPixelSize(capacitySat) - 4) * 1.4;
+  return 22 + (lightningPixelSize(capacitySat) - 4) * 2;
 }
 
 /**

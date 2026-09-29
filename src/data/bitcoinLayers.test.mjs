@@ -41,8 +41,8 @@ test('BTC amounts and Lightning point sizes stay readable across magnitudes', ()
   assert.ok(lightningPixelSize(1e8) > 4);
   assert.ok(lightningPixelSize(100e8) > lightningPixelSize(1e8));
   assert.equal(lightningPixelSize(1e15), 14);
-  assert.equal(boltHeight(0), 16);
-  assert.equal(boltHeight(1e15), 30);
+  assert.equal(boltHeight(0), 22);
+  assert.equal(boltHeight(1e15), 42);
 });
 
 test('cards say what the data is and is not', () => {
