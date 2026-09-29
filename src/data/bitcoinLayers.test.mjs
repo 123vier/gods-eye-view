@@ -12,7 +12,8 @@ import bitcoinLayers, {
   formatBtc,
   lightningPixelSize,
   lightningRecord,
-  meetupLink,
+  cardLinkAt,
+  meetupLinks,
   meetupRecord,
   merchantRecord,
   merchantRequestBox,
@@ -324,21 +325,37 @@ test('meetup cards show place, next or last meetup and the group link; no activi
   const upcoming = meetupRecord({ ...base, active: true, lastEventAt: Date.UTC(2026, 7, 30), nextEvent: { at: Date.UTC(2026, 9, 2, 16), venue: 'Kleine Burg' } }, 'UTC');
   assert.equal(upcoming.id, '11');
   assert.equal(upcoming.title, 'Einundzwanzig Oldenburg');
-  assert.deepEqual(upcoming.details, ['Oldenburg, DE', 'Next: 2 Oct 2026, 16:00 · Kleine Burg', 'Telegram group ↗ · click card to open']);
-  assert.deepEqual(upcoming.link, { label: 'Telegram group', url: 'https://t.me/+abc' });
+  assert.deepEqual(upcoming.details, ['Oldenburg, DE', 'Next: 2 Oct 2026, 16:00 · Kleine Burg', '↗ Telegram group']);
+  assert.deepEqual(upcoming.link, { label: 'Telegram group', url: 'https://t.me/+abc', line: 2 });
   assert.equal(upcoming.markerKey, 'normal');
   assert.equal(upcoming.properties.nextEvent.at, '2026-10-02T16:00:00.000Z');
 
   // A portal-inactive meetup looks exactly like any other.
   const dormant = meetupRecord({ ...base, active: false, lastEventAt: Date.UTC(2025, 0, 15), nextEvent: null }, 'UTC');
-  assert.deepEqual(dormant.details, ['Oldenburg, DE', 'Last meetup: 15 Jan 2025', 'Telegram group ↗ · click card to open']);
+  assert.deepEqual(dormant.details, ['Oldenburg, DE', 'Last meetup: 15 Jan 2025', '↗ Telegram group']);
   assert.equal(dormant.markerKey, 'normal');
   assert.equal(dormant.markerWidth, upcoming.markerWidth);
 });
 
-test('meetup link prefers the chat, then website, then portal', () => {
-  assert.deepEqual(meetupLink({ chat: 'https://www.meetup.com/x', portal: 'https://p' }), { label: 'Group chat', url: 'https://www.meetup.com/x' });
-  assert.deepEqual(meetupLink({ website: 'https://w', portal: 'https://p' }), { label: 'Website', url: 'https://w' });
-  assert.deepEqual(meetupLink({ portal: 'https://p' }), { label: 'Einundzwanzig portal', url: 'https://p' });
-  assert.equal(meetupLink({}), null);
+test('meetup links: chat and website, portal only as fallback', () => {
+  assert.deepEqual(meetupLinks({ chat: 'https://t.me/x', website: 'https://www.btc-ol.de/', portal: 'https://p.io' }), [
+    { label: 'Telegram group', url: 'https://t.me/x' },
+    { label: 'Website · btc-ol.de', url: 'https://www.btc-ol.de/' },
+  ]);
+  assert.deepEqual(meetupLinks({ chat: 'https://www.meetup.com/x', portal: 'https://p.io' }), [{ label: 'Group chat', url: 'https://www.meetup.com/x' }]);
+  assert.deepEqual(meetupLinks({ website: 'https://w.io', portal: 'https://p.io' }), [{ label: 'Website · w.io', url: 'https://w.io' }]);
+  assert.deepEqual(meetupLinks({ portal: 'https://p.io' }), [{ label: 'Einundzwanzig portal', url: 'https://p.io' }]);
+  assert.deepEqual(meetupLinks({}), []);
+});
+
+test('a card click opens the link on the clicked line, else the primary link', () => {
+  const record = meetupRecord({ id: 1, lat: 0, lon: 0, name: 'M', city: 'C', country: 'DE', links: { chat: 'https://t.me/x', website: 'https://w.io' } }, 'UTC');
+  assert.deepEqual(record.details, ['C, DE', '↗ Telegram group', '↗ Website · w.io']);
+  // Nominal card: 8 pad + 15 title + 3 × 15 lines + 8 pad = 76 px.
+  const rect = { y: 100, h: 76 };
+  assert.equal(cardLinkAt(record, rect, 100 + 8 + 15 + 15 + 7).url, 'https://t.me/x');
+  assert.equal(cardLinkAt(record, rect, 100 + 8 + 15 + 30 + 7).url, 'https://w.io');
+  assert.equal(cardLinkAt(record, rect, 105).url, 'https://t.me/x', 'title → primary');
+  // A scaled-down card maps clicks proportionally.
+  assert.equal(cardLinkAt(record, { y: 0, h: 38 }, (8 + 15 + 30 + 7) / 2).url, 'https://w.io');
 });

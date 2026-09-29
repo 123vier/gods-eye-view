@@ -370,35 +370,71 @@ export function formatEventTime(epochMs, timeZone) {
   });
 }
 
-/**
- * The link a meetup card opens: the group chat (mostly Telegram), else the
- * meetup's website, else its Einundzwanzig portal page.
- * @param {object} [links] Normalized proxy links.
- * @returns {?{label:string, url:string}}
- */
-export function meetupLink(links = {}) {
-  const chat = links?.chat;
-  if (chat) {
-    let host = '';
-    try {
-      host = new URL(chat).hostname.replace(/^www\./, '');
-    } catch {
-      return null;
-    }
-    const telegram = host === 't.me' || host === 'telegram.me';
-    return { label: telegram ? 'Telegram group' : 'Group chat', url: chat };
+/** Hostname without "www.", or null for an unparsable URL. */
+function linkHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
   }
-  if (links?.website) return { label: 'Website', url: links.website };
-  if (links?.portal)
-    return { label: 'Einundzwanzig portal', url: links.portal };
-  return null;
+}
+
+/**
+ * The links a meetup card offers: the group chat (mostly Telegram) and the
+ * meetup's own website; the Einundzwanzig portal page only when neither exists.
+ * @param {object} [links] Normalized proxy links.
+ * @returns {Array<{label:string, url:string}>} Primary link first.
+ */
+export function meetupLinks(links = {}) {
+  const out = [];
+  const chatHost = links?.chat ? linkHost(links.chat) : null;
+  if (chatHost) {
+    const telegram = chatHost === 't.me' || chatHost === 'telegram.me';
+    out.push({
+      label: telegram ? 'Telegram group' : 'Group chat',
+      url: links.chat,
+    });
+  }
+  const siteHost = links?.website ? linkHost(links.website) : null;
+  if (siteHost && links.website !== links.chat) {
+    out.push({ label: `Website · ${siteHost}`, url: links.website });
+  }
+  if (!out.length && links?.portal && linkHost(links.portal)) {
+    out.push({ label: 'Einundzwanzig portal', url: links.portal });
+  }
+  return out;
 }
 
 /** Open a card's link in a new tab, without handing it this window. */
-function openRecordLink(record) {
-  if (!record?.link?.url) return false;
-  globalThis.open?.(record.link.url, '_blank', 'noopener,noreferrer');
+function openRecordLink(record, link = record?.link) {
+  if (!link?.url) return false;
+  globalThis.open?.(link.url, '_blank', 'noopener,noreferrer');
   return true;
+}
+
+/**
+ * Selected-card metrics from measureOverlayEntry (worldOverlayDraw.js):
+ * vertical padding, title height and detail line height, in CSS pixels.
+ */
+const SELECTED_CARD_LAYOUT = Object.freeze({ padY: 8, titleH: 15, lineH: 15 });
+
+/**
+ * The link on the clicked card line, else the card's primary link.
+ * @param {object} record Card record with `links` / `link`.
+ * @param {{y:number, h:number}} rect Painted card rect.
+ * @param {number} clickY Click y in the same pixel space.
+ * @returns {?{label:string, url:string}}
+ */
+export function cardLinkAt(record, rect, clickY) {
+  const { padY, titleH, lineH } = SELECTED_CARD_LAYOUT;
+  const lines = record?.details?.length || 0;
+  const nominalH = padY * 2 + titleH + lines * lineH;
+  // The painted rect may be scaled; map the click back to nominal pixels.
+  const localY = ((clickY - rect.y) * nominalH) / (rect.h || nominalH);
+  const line = Math.floor((localY - padY - titleH) / lineH);
+  return (
+    record?.links?.find((link) => link.line === line) || record?.link || null
+  );
 }
 
 /**
@@ -420,8 +456,11 @@ export function meetupRecord(meetup, timeZone) {
       `Last meetup: ${formatEventTime(meetup.lastEventAt, timeZone).split(',')[0]}`,
     );
   }
-  const link = meetupLink(meetup.links);
-  if (link) details.push(`${link.label} ↗ · click card to open`);
+  // Each link gets its own card line; a click on that line opens it.
+  const links = meetupLinks(meetup.links).map((link) => {
+    details.push(`↗ ${link.label}`);
+    return { ...link, line: details.length - 1 };
+  });
   return {
     id: String(meetup.id),
     lat: meetup.lat,
@@ -431,7 +470,8 @@ export function meetupRecord(meetup, timeZone) {
     markerKey: 'normal',
     markerWidth: 32,
     markerHeight: 32,
-    link,
+    link: links[0] || null,
+    links,
     title: meetup.name,
     details,
     properties: {
@@ -906,7 +946,10 @@ export function createBitcoinPointLayer(
         });
       if (cardHit) {
         const record = state.rendered.get(state.selectedId)?.record;
-        if (record?.link) openRecordLink(record);
+        openRecordLink(
+          record,
+          cardLinkAt(record, cardHit.rect, click.position.y),
+        );
         return;
       }
       const picked = viewer.scene.pick(click.position);
