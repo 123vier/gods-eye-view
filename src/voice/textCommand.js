@@ -36,6 +36,12 @@ export async function runTextCommand(text, { runner, fetchImpl = fetch }) {
     body: JSON.stringify({ text }),
   });
   const data = await response.json().catch(() => ({}));
+  if (response.status === 429)
+    return {
+      ok: false,
+      message: 'Too many commands — wait a few seconds and try again.',
+      results: [],
+    };
   if (!response.ok)
     return {
       ok: false,
