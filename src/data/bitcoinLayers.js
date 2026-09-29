@@ -309,8 +309,9 @@ export function nodeRecord(location) {
     lon: location.lon,
     color: COLORS.node,
     pixelSize: 5,
-    markerWidth: 13,
-    markerHeight: 13,
+    // 50 % above the original 13 px coin.
+    markerWidth: 19.5,
+    markerHeight: 19.5,
     title: 'Bitcoin full node location',
     details: [
       'Reachable node(s) · IP-geolocated · approximate',
