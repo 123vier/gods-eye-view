@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearOverlaySource,
+  hitTestWorldOverlay,
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
@@ -69,6 +70,7 @@ const DEFAULT_OVERLAY_HOST = Object.freeze({
   setEntries: setOverlayEntries,
   setVisible: setOverlaySourceVisible,
   clearSource: clearOverlaySource,
+  hitTest: hitTestWorldOverlay,
 });
 
 /**
@@ -175,7 +177,7 @@ function coinIcon(disc, mark) {
  * @param {string} fill Fill colour.
  * @param {string} border Border colour.
  * @param {string} mark Text colour.
- * @param {number} [alpha=1] Whole-badge opacity (inactive meetups fade).
+ * @param {{glow?:string}} [options] Optional glow colour around the border.
  */
 function diamondBadgeIcon(fill, border, mark, { glow = null } = {}) {
   const size = 64;
@@ -222,8 +224,6 @@ export const MEETUP_MARKER_IMAGES = () => ({
   normal: diamondBadgeIcon('#ffffff', COLORS.meetupRim, COLORS.node, {
     glow: COLORS.meetupRim,
   }),
-  // Dark slate inside the same orange rim: still findable, clearly not active.
-  inactive: diamondBadgeIcon('#46505a', COLORS.meetupRim, '#f0f2f4'),
   selected: diamondBadgeIcon(COLORS.node, '#ffffff', '#ffffff', {
     glow: '#ffffff',
   }),
@@ -371,6 +371,37 @@ export function formatEventTime(epochMs, timeZone) {
 }
 
 /**
+ * The link a meetup card opens: the group chat (mostly Telegram), else the
+ * meetup's website, else its Einundzwanzig portal page.
+ * @param {object} [links] Normalized proxy links.
+ * @returns {?{label:string, url:string}}
+ */
+export function meetupLink(links = {}) {
+  const chat = links?.chat;
+  if (chat) {
+    let host = '';
+    try {
+      host = new URL(chat).hostname.replace(/^www\./, '');
+    } catch {
+      return null;
+    }
+    const telegram = host === 't.me' || host === 'telegram.me';
+    return { label: telegram ? 'Telegram group' : 'Group chat', url: chat };
+  }
+  if (links?.website) return { label: 'Website', url: links.website };
+  if (links?.portal)
+    return { label: 'Einundzwanzig portal', url: links.portal };
+  return null;
+}
+
+/** Open a card's link in a new tab, without handing it this window. */
+function openRecordLink(record) {
+  if (!record?.link?.url) return false;
+  globalThis.open?.(record.link.url, '_blank', 'noopener,noreferrer');
+  return true;
+}
+
+/**
  * Einundzwanzig meetup → render/card record.
  * @param {object} meetup Normalized proxy record.
  * @param {string} [timeZone] Override for tests.
@@ -389,27 +420,23 @@ export function meetupRecord(meetup, timeZone) {
       `Last meetup: ${formatEventTime(meetup.lastEventAt, timeZone).split(',')[0]}`,
     );
   }
-  if (meetup.active === true)
-    details.push('Active · met or meets within 6 months');
-  else if (meetup.active === false)
-    details.push('Inactive · no meetup within 6 months');
-  else details.push('Activity unknown');
-  const inactive = meetup.active === false;
+  const link = meetupLink(meetup.links);
+  if (link) details.push(`${link.label} ↗ · click card to open`);
   return {
     id: String(meetup.id),
     lat: meetup.lat,
     lon: meetup.lon,
     color: COLORS.node,
     pixelSize: 6,
-    markerKey: inactive ? 'inactive' : 'normal',
-    markerWidth: inactive ? 27 : 32,
-    markerHeight: inactive ? 27 : 32,
+    markerKey: 'normal',
+    markerWidth: 32,
+    markerHeight: 32,
+    link,
     title: meetup.name,
     details,
     properties: {
       city: meetup.city || null,
       country: meetup.country || null,
-      active: meetup.active,
       lastEventAt: meetup.lastEventAt
         ? new Date(meetup.lastEventAt).toISOString()
         : null,
@@ -596,7 +623,14 @@ export function createBitcoinPointLayer(
           title: entry.record.title,
           details: entry.record.details,
           accent: entry.record.color,
-          interactive: false,
+          // A card with a link (meetup chat) opens it on click.
+          interactive: Boolean(entry.record.link),
+          ...(entry.record.link
+            ? {
+                accessibilityLabel: `${entry.record.title}: ${entry.record.link.label}`,
+                activate: () => openRecordLink(entry.record),
+              }
+            : {}),
           anchorRadiusPx: 9,
           minAnchorGapPx: 11,
           verticalOnly: true,
@@ -865,6 +899,16 @@ export function createBitcoinPointLayer(
     state.clickHandler = screenSpaceEventHandlerFactory(viewer.scene.canvas);
     state.clickHandler.setInputAction((click) => {
       if (!state.enabled) return;
+      const cardHit =
+        state.selectedId &&
+        overlayHost.hitTest?.(click.position.x, click.position.y, {
+          sourceId: selectedOverlayId,
+        });
+      if (cardHit) {
+        const record = state.rendered.get(state.selectedId)?.record;
+        if (record?.link) openRecordLink(record);
+        return;
+      }
       const picked = viewer.scene.pick(click.position);
       const key =
         picked?.collection === state.points && typeof picked.id === 'string'
@@ -1048,22 +1092,11 @@ const MEETUPS_LAYER_CONFIG = Object.freeze({
   mode: 'global',
   refreshInterval: 6 * 60 * 60_000,
   markerImages: MEETUP_MARKER_IMAGES,
-  // Active meetups last, so they draw above faded inactive badges.
   toRecords: (payload) =>
-    (Array.isArray(payload?.meetups) ? payload.meetups : [])
-      .map((meetup) => meetupRecord(meetup))
-      .sort(
-        (a, b) =>
-          (a.markerKey === 'inactive' ? 0 : 1) -
-          (b.markerKey === 'inactive' ? 0 : 1),
-      ),
-  summary: (payload) => {
-    const total = payload?.meetups?.length || 0;
-    const active = Number(payload?.activeCount);
-    return Number.isFinite(active)
-      ? `${total} meetups · ${active} active`
-      : `${total} meetups`;
-  },
+    (Array.isArray(payload?.meetups) ? payload.meetups : []).map((meetup) =>
+      meetupRecord(meetup),
+    ),
+  summary: (payload) => `${payload?.meetups?.length || 0} meetups`,
 });
 
 /** Fresh layer instances for one application catalog. */
