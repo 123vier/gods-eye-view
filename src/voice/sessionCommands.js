@@ -1,5 +1,6 @@
 import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
+import { mountTextCommand } from './textCommand.js';
 
 /** Bind common controls to a supplied voice-session adapter. */
 export function createVoiceCommands({
@@ -65,11 +66,17 @@ export function createVoiceCommands({
     else void session.start({ pushToTalk: false });
   };
   ui.button.addEventListener('click', buttonHandler);
+  // Typed AI commands (OpenRouter) reuse this runner; they work without an OpenAI key.
+  const textCommand =
+    typeof ui.root?.querySelector === 'function'
+      ? mountTextCommand({ root: ui.root, runner })
+      : null;
   session.signal.addEventListener(
     'abort',
     () => {
       ui.button.removeEventListener('click', buttonHandler);
       annotationUnsubscribe?.();
+      textCommand?.destroy();
       updateStatus();
       ui.root.remove();
     },
@@ -78,6 +85,7 @@ export function createVoiceCommands({
   if (session.disposed) {
     ui.button.removeEventListener('click', buttonHandler);
     annotationUnsubscribe?.();
+    textCommand?.destroy();
     updateStatus();
     ui.root.remove();
   } else adapter.bindControls?.();

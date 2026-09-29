@@ -788,6 +788,22 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## Typed AI commands (OpenRouter)
+
+`src/voice/textCommand.js` mounts a text box on the voice control; it is
+enabled only when `/api/text-command` reports a configured
+`OPENROUTER_API_KEY`. A submitted command (at most 500 characters) is sent to
+that local proxy (`server/providers/openrouter/text-command.js`), which makes
+one Chat Completions call to OpenRouter with the voice tool schemas trimmed to
+an allowlist of fire-and-forget controls (`TEXT_COMMAND_TOOL_NAMES` in
+`src/voice/textCommandPlan.js`). Query tools are excluded because a single
+turn cannot feed results back to the model. The browser runs the returned
+calls — at most six — in order through the same action runner as voice and
+stops at the first failure. A reply without tool calls is shown as the
+status text together with example commands. The key never reaches the
+browser; the model defaults to `anthropic/claude-haiku-4.5` and is set with
+`OPENROUTER_MODEL`.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection

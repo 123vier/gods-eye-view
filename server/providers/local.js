@@ -25,6 +25,7 @@ import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { openRouterTextCommandProxy } from './openrouter/text-command.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -46,6 +47,7 @@ function localProviderPlugins() {
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    openRouterTextCommandProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),

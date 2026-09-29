@@ -20,6 +20,7 @@
 @import './src/ui/styles/voice-cost.css';
 @import './src/ui/styles/first-run.css';
 @import './src/ui/styles/provider-settings.css';
+@import './src/ui/styles/text-command.css';
 
 @import './src/ui/styles/weather.css';
 @import './src/ui/styles/cyber.css';

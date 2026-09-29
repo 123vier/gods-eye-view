@@ -1273,6 +1273,8 @@
       "src/voice/commands.js",
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
+      "src/voice/textCommand.js",
+      "src/voice/textCommandPlan.js",
       "src/voice/realtimeSession.js",
       "src/voice/realtimeEvents.js",
       "src/voice/realtimePreferences.js",
@@ -1880,6 +1882,8 @@
       "src/search/presetGeocoder.js",
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
+      "src/voice/textCommand.js",
+      "src/voice/textCommandPlan.js",
       "src/voice/realtimeSession.js",
       "src/voice/realtimeEvents.js",
       "src/app/localGeojsonServices.js",
@@ -2748,6 +2752,8 @@
     "exports": ["./voice/session-controls"],
     "modules": [
       "src/voice/sessionCommands.js",
+      "src/voice/textCommand.js",
+      "src/voice/textCommandPlan.js",
       "src/voice/session.js",
       "src/voice/control.js"
     ],

@@ -1,5 +1,11 @@
 # Changelog
 
+- Typed AI commands: with `OPENROUTER_API_KEY` set, a text box above the voice
+  control turns one typed sentence (any language) into the same tool calls the
+  voice agent uses, without an OpenAI Realtime session. One OpenRouter chat
+  call per command (`OPENROUTER_MODEL`, default `anthropic/claude-haiku-4.5`)
+  plans up to six allowlisted control actions, which then run locally in
+  order. The key stays server-side; without it the box stays disabled.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
