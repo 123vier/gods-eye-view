@@ -6,6 +6,8 @@
   call per command (`OPENROUTER_MODEL`, default `anthropic/claude-haiku-4.5`)
   plans up to six allowlisted control actions, which then run locally in
   order. The key stays server-side; without it the box stays disabled.
+  `GEV_RATELIMIT_OPENROUTER_PER_MIN` optionally caps commands per client and
+  minute, like the other `GEV_RATELIMIT_*` throttles.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

@@ -802,7 +802,10 @@ calls — at most six — in order through the same action runner as voice and
 stops at the first failure. A reply without tool calls is shown as the
 status text together with example commands. The key never reaches the
 browser; the model defaults to `anthropic/claude-haiku-4.5` and is set with
-`OPENROUTER_MODEL`.
+`OPENROUTER_MODEL`. `GEV_RATELIMIT_OPENROUTER_PER_MIN` is an opt-in per-IP cap
+on command requests, sharing the OpenAI proxy's limiter and 429 response; it
+is unset (unlimited) by default, and the configuration check is never counted.
+Over the cap the box shows a retry hint instead of the raw error.
 
 ## Map Source control ownership
 

@@ -94,3 +94,33 @@ test('an unknown tool or empty reply still reports a not-recognized outcome', as
   assert.deepEqual([outcome.noMatch, outcome.message], [true, 'Command not recognized.']);
   assert.ok(TEXT_COMMAND_EXAMPLES.length >= 6);
 });
+
+test('the opt-in rate limit answers 429 before any OpenRouter call', async () => {
+  const { handleTextCommand } = await import('../../server/providers/openrouter/text-command.js');
+  const saved = { ...process.env };
+  process.env.GEV_RATELIMIT_OPENROUTER_PER_MIN = '1';
+  delete process.env.OPENROUTER_API_KEY; // a 503 proves the request got past the limiter
+  const call = async (method) => {
+    const res = { statusCode: 0, headers: {}, body: '', setHeader(k, v) { this.headers[k] = v; }, end(b) { this.body = b; } };
+    await handleTextCommand({ method, socket: { remoteAddress: '203.0.113.7' } }, res);
+    return res;
+  };
+  try {
+    assert.equal((await call('GET')).statusCode, 200, 'the config check is not counted');
+    assert.equal((await call('POST')).statusCode, 503);
+    const limited = await call('POST');
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.headers['Retry-After'], '5');
+  } finally {
+    process.env = saved;
+  }
+});
+
+test('a 429 becomes a readable status message', async () => {
+  const outcome = await runTextCommand('fly to Berlin', {
+    runner: async () => ({ ok: true }),
+    fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ error: 'Rate limit exceeded' }) }),
+  });
+  assert.equal(outcome.ok, false);
+  assert.match(outcome.message, /Too many commands/);
+});

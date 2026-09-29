@@ -1,4 +1,6 @@
 import { readRequestBody } from '../common/request.js';
+import { makeOptInRateLimiter } from '../common/rate-limit.js';
+import { enforceOptInRateLimit } from '../openai/rate-limit.js';
 import { GEV_REALTIME_TOOLS } from '../openai/tools.js';
 import { TEXT_COMMAND_TOOL_NAMES } from '../../../src/voice/textCommandPlan.js';
 
@@ -67,6 +69,22 @@ export function extractToolCalls(message) {
     .filter((call) => typeof call.name === 'string');
 }
 
+// Built lazily on first use: `.env` reaches process.env only after this module
+// loads. Rebuilt when the value changes, so the per-IP window state otherwise
+// persists across requests. `null` = unlimited (the default).
+let _rateLimiter = null;
+let _rateLimiterEnv;
+
+/** Opt-in per-IP throttle for command requests (GEV_RATELIMIT_OPENROUTER_PER_MIN). */
+function textCommandRateLimiter() {
+  const value = process.env.GEV_RATELIMIT_OPENROUTER_PER_MIN;
+  if (value !== _rateLimiterEnv) {
+    _rateLimiterEnv = value;
+    _rateLimiter = makeOptInRateLimiter(value);
+  }
+  return _rateLimiter;
+}
+
 function sendJson(res, statusCode, payload) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -88,6 +106,8 @@ async function handleTextCommand(req, res) {
     sendJson(res, 405, { error: 'Method not allowed' });
     return;
   }
+  // Only commands spend OpenRouter credit; the config check above is free.
+  if (!enforceOptInRateLimit(textCommandRateLimiter(), req, res)) return;
   if (!apiKey) {
     sendJson(res, 503, { error: 'OPENROUTER_API_KEY is not configured' });
     return;
